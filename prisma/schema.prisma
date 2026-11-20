@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String         @id @default(uuid())
+  identityHash       String         @unique @map("identity_hash")
+  selectedLocation   Json?          @map("selected_location")
+  locationCandidates Json?          @map("location_candidates")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  items              ShoppingItem[]
+  sessions           ChatSession[]
+}
+
+model ShoppingItem {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  quantity  Int      @default(1)
+  notes     String   @default("")
+  status    String   @default("pending")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+}
+
+model ChatSession {
+  id               String        @id @default(uuid())
+  userId           String        @map("user_id")
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode             String
+  status           String        @default("active")
+  selectedLocation Json?         @map("selected_location")
+  context          Json?
+  turnToken        String?       @map("turn_token")
+  turnExpiresAt    DateTime?     @map("turn_expires_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  messages         ChatMessage[]
+
+  @@index([userId, mode, updatedAt])
+}
+
+model ChatMessage {
+  id                   Int         @id @default(autoincrement())
+  sessionId            String      @map("session_id")
+  session              ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role                 String
+  content              String
+  relevantToolMetadata Json?       @map("relevant_tool_metadata")
+  requestId            String?     @map("request_id")
+  createdAt            DateTime    @default(now()) @map("created_at")
+
+  @@unique([sessionId, requestId, role])
+  @@index([sessionId, createdAt])
+}

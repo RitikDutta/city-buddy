@@ -1,0 +1,45 @@
+{
+  "name": "citybuddy",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "postinstall": "prisma generate",
+    "db:setup": "node scripts/db.mjs",
+    "predev": "npm run db:setup",
+    "dev": "next dev --webpack --hostname 127.0.0.1 --port 3000",
+    "build": "next build --webpack",
+    "prestart": "npm run db:setup",
+    "start": "next start --hostname 127.0.0.1 --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:live": "node scripts/live-check.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.2.0",
+    "@fontsource/dm-serif-text": "^5.2.0",
+    "@google/genai": ">=1.40.0 <3",
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "@prisma/client": "~6.19.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "lucide-react": "^0.577.0",
+    "next": "^16.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/google.maps": "^3.58.0",
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prisma": "~6.19.0",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.0"
+  }
+}
