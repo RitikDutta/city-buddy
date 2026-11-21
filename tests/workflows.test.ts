@@ -107,6 +107,8 @@ const landmark = fixturePlace(
 );
 const first = fixturePlace("fixture-first", "Fixture museum", 26.91, 75.8);
 const second = fixturePlace("fixture-second", "Fixture gallery", 26.9, 75.83);
+const homeSummary = "Mansarovar is a neighbourhood in southern Jaipur.";
+const landmarkHistory = "Hawa Mahal was completed in 1799.";
 function reply(name: string, args: Record<string, any>) {
   if (name === "resolve_names")
     return {
@@ -147,7 +149,15 @@ function reply(name: string, args: Record<string, any>) {
         : [home];
   return {
     summary: places
-      .map((p, i) => p.attribution.title + " [" + i + "]")
+      .map((p, i) => {
+        const text =
+          p === home
+            ? homeSummary
+            : p === landmark
+              ? landmarkHistory
+              : p.attribution.title;
+        return text + " [" + i + "]";
+      })
       .join("\n"),
     places,
   };
@@ -486,8 +496,14 @@ test("changing location resets geographic references, preserves chat/list, and S
       say("A fictional king built it in 9999."),
     ),
   });
-  assert.match(session.messages.at(-1)!.content, /sources don’t verify/);
-  assert.doesNotMatch(session.messages.at(-1)!.content, /9999/);
+  const overview = session.messages.at(-1)!;
+  assert.equal(overview.content, homeSummary);
+  assert.equal(overview.metadata?.suggestion, "Show me nearby landmarks.");
+  assert.ok(
+    overview.metadata?.sources.some(
+      ({ title }) => title === home.attribution.title,
+    ),
+  );
   const choices = await new ManualLocationProvider().resolve(
     "Hawa Mahal, Jaipur",
   );
@@ -514,6 +530,40 @@ test("changing location resets geographic references, preserves chat/list, and S
     (await repo.openSession(user, "on_site_guide")).id,
     session.id,
   );
+});
+test("the guide preserves cited history and stores the next prompt separately from the answer", async () => {
+  const { user } = await withLocation();
+  let session = await repo.openSession(user, "on_site_guide");
+  session = await run(user, input(user, session, "What is its history?"), {
+    model: script(
+      call("search_places", { textQuery: "Mansarovar" }),
+      say("A fictional king built it in 9999."),
+    ),
+  });
+  assert.match(session.messages.at(-1)!.content, /sources don’t verify/);
+  assert.doesNotMatch(session.messages.at(-1)!.content, /9999/);
+  assert.equal(
+    session.messages.at(-1)!.metadata?.suggestion,
+    "Show me nearby landmarks.",
+  );
+
+  const choices = await new ManualLocationProvider().resolve(
+    "Hawa Mahal, Jaipur",
+  );
+  await repo.rememberChoices(user, choices);
+  await repo.selectLocation(user, landmark.id);
+  session = await repo.session(user, session.id);
+  session = await run(user, input(user, session, "Tell me about this place."), {
+    model: script(
+      call("search_places", { textQuery: "Hawa Mahal" }),
+      call("cite_history", { place_id: landmark.id, excerpt: landmarkHistory }),
+      say(landmarkHistory + "\n\nNext prompt: What can I visit nearby?"),
+    ),
+  });
+  const answer = session.messages.at(-1)!;
+  assert.equal(answer.content, landmarkHistory);
+  assert.equal(answer.metadata?.history_excerpt, landmarkHistory);
+  assert.equal(answer.metadata?.suggestion, "What can I visit nearby?");
 });
 test("failed or interrupted turns roll back staged writes and concurrent sends cannot interleave", async () => {
   const quotaError = (quotaId: string) => ({

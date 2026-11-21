@@ -1080,6 +1080,14 @@ code {
   font-size: 0.8rem;
   color: #526951;
 }
+.message-prompts {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+.chat-prompts button:hover:not(:disabled) {
+  background: #e2ecdd;
+  border-color: #a3b69b;
+}
 .message {
   align-self: flex-start;
   background: #f2f5eb;

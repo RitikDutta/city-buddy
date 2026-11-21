@@ -85,6 +85,7 @@ export class TurnTools {
   };
   readonly context: GeoContext;
   clarification = "";
+  citedPlaceId?: string;
   private initial: Map<string, Item>;
   private working: Map<string, Item>;
   private touched = new Set<string>();
@@ -340,6 +341,7 @@ export class TurnTools {
         );
       }
       this.metadata.history_excerpt = excerpt;
+      this.citedPlaceId = place.place_id;
       this.metadata.sources = sources(this.metadata.sources, place.sources);
       return { excerpt, place: place.name };
     }

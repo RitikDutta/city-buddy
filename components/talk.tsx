@@ -19,6 +19,16 @@ const prompts: Record<Mode, string[]> = {
   live_talk: ["Show nearby tourist places.", "Find cafés around here."],
   on_site_guide: ["Tell me about this place.", "What else can I visit nearby?"],
 };
+const savedGuideFollowUps = [
+  {
+    question: "Would you like to explore nearby landmarks?",
+    prompt: "Show me nearby landmarks.",
+  },
+  {
+    question: "क्या आप आस-पास की जगहें देखना चाहेंगे?",
+    prompt: "आस-पास की जगहें दिखाएँ।",
+  },
+];
 function RichText({ value }: { value: string }) {
   const plain = value.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, "$1");
   return (
@@ -109,6 +119,10 @@ export function ChatRoom({
     const card = document.getElementById("place-" + id);
     if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
+  const fillDraft = (prompt: string) => {
+    setDraft(prompt);
+    compose.current?.focus();
+  };
   const send = async (e: FormEvent) => {
     e.preventDefault();
     const message = draft.trim();
@@ -272,10 +286,8 @@ export function ChatRoom({
                     {prompts[mode].map((p) => (
                       <button
                         key={p}
-                        onClick={() => {
-                          setDraft(p);
-                          compose.current?.focus();
-                        }}
+                        type="button"
+                        onClick={() => fillDraft(p)}
                       >
                         {p}
                       </button>
@@ -285,35 +297,69 @@ export function ChatRoom({
               )}
             </div>
           )}
-          {session.messages.map((m) => (
-            <article key={m.id} className={"message " + m.role}>
-              <small>{m.role === "user" ? "You" : "CityBuddy"}</small>
-              <RichText value={m.content} />
-              {m.metadata && (
-                <>
-                  {m.metadata.history_excerpt && (
-                    <blockquote className="source-excerpt">
-                      {m.metadata.history_excerpt}
-                    </blockquote>
-                  )}
-                  <Sources values={m.metadata.sources} />
-                  {m.metadata.save_url && (
-                    <a
-                      className="source-link"
-                      href={m.metadata.save_url}
-                      target="_blank"
-                      rel="noreferrer"
+          {session.messages.map((m) => {
+            const savedFollowUp =
+              m.role === "assistant" &&
+              mode === "on_site_guide" &&
+              !m.metadata?.suggestion
+                ? savedGuideFollowUps.find(({ question }) =>
+                    m.content.endsWith(question),
+                  )
+                : undefined;
+            const prompt =
+              m.role === "assistant"
+                ? (m.metadata?.suggestion ?? savedFollowUp?.prompt)
+                : undefined;
+            const canSuggest = prompt && !ended && !needsLocation;
+            return (
+              <article key={m.id} className={"message " + m.role}>
+                <small>{m.role === "user" ? "You" : "CityBuddy"}</small>
+                <RichText
+                  value={
+                    canSuggest && savedFollowUp
+                      ? m.content
+                          .slice(0, -savedFollowUp.question.length)
+                          .trimEnd()
+                      : m.content
+                  }
+                />
+                {m.metadata && (
+                  <>
+                    {m.metadata.history_excerpt && (
+                      <blockquote className="source-excerpt">
+                        {m.metadata.history_excerpt}
+                      </blockquote>
+                    )}
+                    <Sources values={m.metadata.sources} />
+                    {m.metadata.save_url && (
+                      <a
+                        className="source-link"
+                        href={m.metadata.save_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open places in Google Maps <ExternalLink size={12} />
+                      </a>
+                    )}
+                    {m.metadata.routes.map((r, i) => (
+                      <RouteCard key={i} route={r} />
+                    ))}
+                  </>
+                )}
+                {canSuggest && (
+                  <div className="chat-prompts message-prompts">
+                    <button
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => fillDraft(prompt)}
                     >
-                      Open places in Google Maps <ExternalLink size={12} />
-                    </a>
-                  )}
-                  {m.metadata.routes.map((r, i) => (
-                    <RouteCard key={i} route={r} />
-                  ))}
-                </>
-              )}
-            </article>
-          ))}
+                      {prompt}
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
           {pending && (
             <article className="message user">
               <small>You</small>

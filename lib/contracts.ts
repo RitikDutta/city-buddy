@@ -99,6 +99,7 @@ export type Item = ItemValues & {
 };
 export type MessageMeta = {
   history_excerpt?: string;
+  suggestion?: string;
   tools: string[];
   places: Place[];
   routes: RouteResult[];
