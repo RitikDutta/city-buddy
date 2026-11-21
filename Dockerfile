@@ -21,12 +21,6 @@ COPY components ./components
 COPY lib ./lib
 COPY public ./public
 
-# Next.js embeds these browser-facing settings in the production build.
-ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-ARG NEXT_PUBLIC_GOOGLE_MAP_ID
-ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY} \
-    NEXT_PUBLIC_GOOGLE_MAP_ID=${NEXT_PUBLIC_GOOGLE_MAP_ID}
-
 RUN npm run build && rm -rf .next/cache
 
 FROM dependencies AS runtime

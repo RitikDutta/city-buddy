@@ -24,7 +24,9 @@ docker compose up --build -d
 
 Open [CityBuddy on localhost](http://localhost:3000). On startup, the container applies pending Prisma migrations to its SQLite database in the `citybuddy-data` volume. The container starts with its own database. `docker compose down` keeps that volume.
 
-Set `CITYBUDDY_PORT` in `.env` to use a different host port. Allow the resulting localhost origin in the Maps browser key restrictions. Rebuild the image after changing `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` or `NEXT_PUBLIC_GOOGLE_MAP_ID` so the browser bundle picks up the change.
+Set `CITYBUDDY_PORT` in `.env` to use a different host port. Allow the resulting localhost origin in the Maps browser key restrictions. Compose supplies the Maps and Gemini settings from `.env` when it creates the container.
+
+To use the Docker Hub image, run `docker compose pull` followed by `docker compose up -d --no-build`.
 
 ## Connect Google services
 

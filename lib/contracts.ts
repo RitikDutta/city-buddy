@@ -131,6 +131,7 @@ export type Workspace = {
   location: Location | null;
   items: Item[];
   sessions: SessionSummary[];
+  browserMap: { apiKey: string; mapId?: string } | null;
   configured: { gemini: boolean; maps: boolean; browserMap: boolean };
 };
 export const incomingSchema = z

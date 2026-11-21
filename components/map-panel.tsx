@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ExternalLink, MapPin, Milestone, X } from "lucide-react";
 import { type Location, type Place, type RouteResult } from "@/lib/contracts";
 import { Spinner } from "./ui";
+import { useWorkspace } from "./workspace";
 
 declare global {
   interface Window {
@@ -17,7 +18,7 @@ const mapLoadError =
 const mapAuthError =
   "Google Maps rejected the browser key. Check Maps JavaScript API and the allowed website in your Google Cloud project.";
 
-function loadMap() {
+function loadMap(apiKey: string) {
   if (mapAuthFailed) return Promise.reject(new Error(mapAuthError));
   if (
     typeof google !== "undefined" &&
@@ -26,7 +27,6 @@ function loadMap() {
   )
     return Promise.resolve();
   if (mapLoading) return mapLoading;
-  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   mapLoading = new Promise<void>((resolve, reject) => {
     const tag = document.createElement("script");
     let settled = false;
@@ -55,7 +55,7 @@ function loadMap() {
     tag.src =
       "https://maps.googleapis.com/maps/api/js?" +
       new URLSearchParams({
-        key: key ?? "",
+        key: apiKey,
         v: "weekly",
         loading: "async",
         libraries: "marker,geometry",
@@ -66,6 +66,8 @@ function loadMap() {
   return mapLoading;
 }
 function GoogleMap({
+  apiKey,
+  mapId,
   location,
   places,
   routes,
@@ -73,6 +75,8 @@ function GoogleMap({
   choose,
   bottomInset,
 }: {
+  apiKey: string;
+  mapId?: string;
   location: Location;
   places: Place[];
   routes: RouteResult[];
@@ -93,13 +97,13 @@ function GoogleMap({
       if (alive) setError(mapAuthError);
     };
     window.addEventListener("citybuddy-map-auth-error", fail);
-    void loadMap()
+    void loadMap(apiKey)
       .then(() => {
         if (!alive || !container.current) return;
         ref.current = new google.maps.Map(container.current, {
           center: { lat: location.latitude, lng: location.longitude },
           zoom: 14,
-          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "DEMO_MAP_ID",
+          mapId: mapId || "DEMO_MAP_ID",
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: false,
@@ -121,7 +125,7 @@ function GoogleMap({
       ref.current = null;
       window.removeEventListener("citybuddy-map-auth-error", fail);
     };
-  }, [location.latitude, location.longitude, attempt]);
+  }, [apiKey, mapId, location.latitude, location.longitude, attempt]);
   const geometry = useMemo(() => {
     if (!ready) return;
     const bounds = new google.maps.LatLngBounds();
@@ -297,15 +301,18 @@ export function MapPanel({
   changeLocation: () => void;
   bottomInset: number;
 }) {
-  const hasKey = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const { data } = useWorkspace();
+  const browserMap = data?.browserMap;
   const focused =
     places.find((place) => place.place_id === selected) ??
     (location?.place_id === selected ? location : null);
   return (
     <section className="module-map" aria-label="Area map">
-      {hasKey && location ? (
+      {browserMap && location ? (
         <GoogleMap
           key={location.place_id}
+          apiKey={browserMap.apiKey}
+          mapId={browserMap.mapId}
           location={location}
           places={places}
           routes={routes}
@@ -316,7 +323,7 @@ export function MapPanel({
       ) : (
         <div className="map-placeholder">
           <p>
-            {hasKey
+            {browserMap || !data
               ? "Set a location to open the map."
               : "The map needs a Google Maps browser key."}
           </p>
