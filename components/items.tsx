@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Check, Pencil, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { type Item, type ItemValues } from "@/lib/contracts";
 import { api, errorText } from "@/lib/client/api";
@@ -76,6 +76,7 @@ function EditItem({
             >
               <option value="pending">Pending</option>
               <option value="purchased">Purchased</option>
+              <option value="skipped">Skipped</option>
             </select>
           </label>
         </div>
@@ -116,6 +117,7 @@ function ItemsChecklist() {
   const [filter, setFilter] = useState<"all" | Item["status"]>("all");
   const [name, setName] = useState("");
   const [qty, setQty] = useState("1");
+  const addRequestId = useRef<string | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Item | null>(null);
@@ -146,7 +148,9 @@ function ItemsChecklist() {
               await api("items", "POST", {
                 name: name.trim(),
                 quantity: Number(qty),
+                requestId: (addRequestId.current ??= crypto.randomUUID()),
               });
+              addRequestId.current = null;
               setName("");
               setQty("1");
               setFilter("all");
@@ -160,7 +164,10 @@ function ItemsChecklist() {
               value={name}
               maxLength={160}
               required
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                addRequestId.current = null;
+                setName(e.target.value);
+              }}
             />
           </label>
           <label className="qty-input">
@@ -171,7 +178,10 @@ function ItemsChecklist() {
               min={1}
               max={9999}
               required
-              onChange={(e) => setQty(e.target.value)}
+              onChange={(e) => {
+                addRequestId.current = null;
+                setQty(e.target.value);
+              }}
             />
           </label>
           <button className="primary" disabled={!data || !!busy}>
@@ -187,7 +197,7 @@ function ItemsChecklist() {
           </span>
         </div>
         <div className="filter-bar">
-          {(["all", "pending", "purchased"] as const).map((v) => (
+          {(["all", "pending", "purchased", "skipped"] as const).map((v) => (
             <button
               className={v === filter ? "active" : ""}
               key={v}
@@ -198,7 +208,9 @@ function ItemsChecklist() {
                 ? "All items"
                 : v === "pending"
                   ? "Pending"
-                  : "Purchased"}
+                  : v === "skipped"
+                    ? "Skipped"
+                    : "Purchased"}
             </button>
           ))}
         </div>
@@ -241,7 +253,11 @@ function ItemsChecklist() {
                   {i.notes && <p>{i.notes}</p>}
                   <small>
                     Quantity {i.quantity} ·{" "}
-                    {i.status === "purchased" ? "Purchased" : "Pending"}
+                    {i.status === "purchased"
+                      ? "Purchased"
+                      : i.status === "skipped"
+                        ? "Skipped"
+                        : "Pending"}
                   </small>
                 </div>
                 <button

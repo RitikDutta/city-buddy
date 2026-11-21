@@ -78,12 +78,14 @@ export const itemFields = z.object({
   name: z.string().trim().min(1).max(160),
   quantity: z.number().int().min(1).max(9999),
   notes: z.string().trim().max(1200),
-  status: z.enum(["pending", "purchased"]),
+  status: z.enum(["pending", "purchased", "skipped"]),
 });
 export const createItemSchema = itemFields
   .partial()
   .required({ name: true })
+  .extend({ requestId: z.uuid().optional() })
   .strict();
+export type NewItem = z.infer<typeof createItemSchema>;
 export const updateItemSchema = itemFields
   .partial()
   .strict()
@@ -98,8 +100,11 @@ export type Item = ItemValues & {
   updated_at: string;
 };
 export type MessageMeta = {
+  tripId?: string;
+  tripVersion?: number;
   history_excerpt?: string;
   suggestion?: string;
+  providerNotice?: string;
   tools: string[];
   places: Place[];
   routes: RouteResult[];
@@ -133,6 +138,11 @@ export type Workspace = {
   sessions: SessionSummary[];
   browserMap: { apiKey: string; mapId?: string } | null;
   configured: { gemini: boolean; maps: boolean; browserMap: boolean };
+  connections: {
+    meteredEnabled: boolean;
+    keys: Workspace["configured"];
+  };
+  mapPreview: { location: Location; places: Place[] } | null;
 };
 export const incomingSchema = z
   .object({

@@ -15,7 +15,7 @@ RUN npm ci --no-audit --no-fund \
 
 FROM dependencies AS build
 
-COPY next.config.ts postcss.config.mjs tsconfig.json ./
+COPY next.config.ts postcss.config.mjs tsconfig.json instrumentation.ts ./
 COPY app ./app
 COPY components ./components
 COPY lib ./lib

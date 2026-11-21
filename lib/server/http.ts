@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { User } from "@prisma/client";
 import { repository } from "./repository";
 import { AppError } from "./errors";
+import { recordMetric } from "./metrics";
 
 export type RouteId = { params: Promise<{ id: string }> };
 export async function routeId(ctx: RouteId) {
@@ -74,9 +75,11 @@ export async function withUser(
         403,
         "This request must come from the CityBuddy application.",
       );
+    const start = performance.now();
     const identity = await repository.identity(
       req.cookies.get("citybuddy_identity")?.value,
     );
+    recordMetric("database_identity", performance.now() - start);
     token = identity.token;
     const data = await handler(identity.user);
     response = data instanceof Response ? data : NextResponse.json(data);

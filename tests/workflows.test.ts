@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -171,12 +171,23 @@ let host: string;
 before(async () => {
   process.env.DATABASE_URL = "file:" + database;
   process.env.GOOGLE_MAPS_API_KEY = key;
+  process.env.CITYBUDDY_ALLOW_METERED = "1";
   process.env.google_map_api_city_buddy = "";
   delete process.env.GOOGLE_PLACES_API_KEY;
   const sqlite = new DatabaseSync(database);
-  sqlite.exec(
-    readFileSync("prisma/migrations/20261120000000_init/migration.sql", "utf8"),
-  );
+  for (const migration of readdirSync("prisma/migrations", {
+    withFileTypes: true,
+  })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()) {
+    sqlite.exec(
+      readFileSync(
+        join("prisma/migrations", migration, "migration.sql"),
+        "utf8",
+      ),
+    );
+  }
   sqlite.close();
   ({ repository: repo } = await import("../lib/server/repository"));
   ({ db } = await import("../lib/server/db"));
@@ -532,6 +543,39 @@ test("ordinal follow-up survives reopening, routes use verified endpoints, and a
   );
   const search = requests.filter((r) => r.name === "search_places").at(-1)!;
   assert.deepEqual(search.args.locationBias.circle.center, second.location);
+});
+
+test("model guidance follows the language and script of each new user message", async () => {
+  const { user } = await withLocation();
+  let session = await repo.openSession(user, "live_talk");
+  for (const [prompt, guidancePattern, response] of [
+    [
+      "Hello there.",
+      /write the full reply and any follow-up in English/,
+      "Hello!",
+    ],
+    [
+      "Namaste, kaise ho?",
+      /natural Hinglish using Latin letters/,
+      "Namaste! Main theek hoon.",
+    ],
+    ["नमस्ते, आप कैसे हैं?", /Hindi using Devanagari/, "नमस्ते! मैं ठीक हूँ।"],
+    [
+      "Thank you.",
+      /write the full reply and any follow-up in English/,
+      "You’re welcome.",
+    ],
+  ] as const) {
+    session = await run(user, input(user, session, prompt), {
+      model: {
+        async next(_history, guidance) {
+          assert.match(guidance, guidancePattern);
+          return say(response);
+        },
+      },
+    });
+    assert.equal(session.messages.at(-1)?.content, response);
+  }
 });
 test("changing location resets geographic references, preserves chat/list, and Stop closes the session", async () => {
   const { user } = await withLocation();

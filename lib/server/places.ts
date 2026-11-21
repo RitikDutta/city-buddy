@@ -1,6 +1,8 @@
 import type { Place } from "../contracts";
 import { AppError, providerError } from "./errors";
 import { parsePlace, record, webLink } from "./map-results";
+import { meteredEnabled } from "./config";
+import { recordMetric } from "./metrics";
 
 // Optional Places API (New) enrichment. Discovery always happens through MCP.
 export async function placeDetails(
@@ -9,7 +11,7 @@ export async function placeDetails(
   signal?: AbortSignal,
 ) {
   const key = process.env.GOOGLE_PLACES_API_KEY;
-  if (!key) return null;
+  if (!meteredEnabled() || !key) return null;
   const fields = [
     "id",
     "displayName",
@@ -20,6 +22,7 @@ export async function placeDetails(
   if (extended) fields.push("rating", "regularOpeningHours");
   try {
     const timeout = AbortSignal.timeout(6000);
+    recordMetric("external_places_request");
     const res = await fetch(
       "https://places.googleapis.com/v1/places/" + encodeURIComponent(placeId),
       {

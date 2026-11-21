@@ -1,3 +1,5 @@
+import { meteredEnabled } from "./config";
+
 export class AppError extends Error {
   constructor(
     public readonly status: number,
@@ -41,6 +43,12 @@ export const notFound = () =>
 export const conflict = (message: string) =>
   new AppError(409, message, "conflict");
 export function missingProvider(service: "maps" | "gemini") {
+  if (!meteredEnabled())
+    return new AppError(
+      503,
+      "Google services are turned off. Enable CITYBUDDY_ALLOW_METERED in .env and restart to use the configured keys.",
+      "provider_disabled",
+    );
   return service === "maps"
     ? new AppError(
         503,

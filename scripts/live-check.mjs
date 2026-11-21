@@ -5,6 +5,12 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as wait } from "node:timers/promises";
 
 if (existsSync(".env")) process.loadEnvFile(".env");
+if (process.env.CITYBUDDY_ALLOW_METERED !== "1") {
+  console.log(
+    "SKIP  Provider smoke tests require CITYBUDDY_ALLOW_METERED=1. Use npm run test:offline for local workflows.",
+  );
+  process.exit(0);
+}
 const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 let cookie;
 async function request(path, method = "GET", data) {

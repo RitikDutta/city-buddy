@@ -8,6 +8,7 @@ import addFormats from "ajv-formats";
 import { AppError, missingProvider, providerError } from "./errors";
 import { normalizeResult, record, resultPayload } from "./map-results";
 import type { MapResult } from "../contracts";
+import { recordMetric } from "./metrics";
 
 export const supported = [
   "search_places",
@@ -72,6 +73,7 @@ async function connectMaps(
     const transport = new StreamableHTTPClientTransport(url, {
       requestInit: { headers: { "X-Goog-Api-Key": key }, redirect: "error" },
       fetch: (input, init) => {
+        recordMetric("external_mcp_request");
         const timeout = AbortSignal.timeout(
           init?.method === "DELETE" ? 2000 : 35_000,
         );
@@ -136,6 +138,7 @@ async function connectMaps(
               " tool. Use its discovered schema.",
             "invalid_tool_arguments",
           );
+        const start = performance.now();
         try {
           const result = await client.callTool(
             { name, arguments: wire },
@@ -145,6 +148,14 @@ async function connectMaps(
           return normalizeResult(name, resultPayload(result), wire);
         } catch (err) {
           throw providerError("Google Maps MCP", err);
+        } finally {
+          if (name === "search_places" || name === "compute_routes")
+            recordMetric(
+              name === "search_places"
+                ? "external_place_search"
+                : "external_route_estimate",
+              performance.now() - start,
+            );
         }
       },
       async close() {

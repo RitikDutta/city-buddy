@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   ArrowLeft,
+  CalendarDays,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -84,7 +85,7 @@ export function ChatRoom({
   sessionId?: string;
   checklist?: ReactNode;
 }) {
-  const { data, refresh, changeLocation, connections } = useWorkspace();
+  const { data, refresh, changeLocation } = useWorkspace();
   const [session, setSession] = useState<Session | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState("");
@@ -309,6 +310,14 @@ export function ChatRoom({
             <h1>{modeInfo[mode].name}</h1>
           </div>
           <div className="chat-actions">
+            <Link
+              className="icon-button"
+              href="/outing"
+              aria-label="Outing planner"
+              title="Outing planner"
+            >
+              <CalendarDays size={17} />
+            </Link>
             {checklist && (
               <button
                 type="button"
@@ -439,6 +448,11 @@ export function ChatRoom({
                     />
                     {m.metadata && (
                       <>
+                        {m.metadata.providerNotice && (
+                          <p className="provider-notice">
+                            Local reply · {m.metadata.providerNotice}
+                          </p>
+                        )}
                         {m.metadata.history_excerpt && (
                           <blockquote className="source-excerpt">
                             {m.metadata.history_excerpt}
@@ -469,7 +483,7 @@ export function ChatRoom({
                                       target="_blank"
                                       rel="noreferrer"
                                       aria-label={
-                                        "Open " + place.name + " in Google Maps"
+                                        "Open the map listing for " + place.name
                                       }
                                     >
                                       <ExternalLink size={13} />
@@ -539,10 +553,7 @@ export function ChatRoom({
             ) : (
               <div className="composer-wrap">
                 {data && !data.configured.gemini && (
-                  <div className="setup-note">
-                    Gemini needs an API key to chat.{" "}
-                    <button onClick={connections}>View setup</button>
-                  </div>
+                  <div className="setup-note">Local text mode</div>
                 )}
                 <form className="composer" onSubmit={send}>
                   <textarea

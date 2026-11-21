@@ -1,11 +1,13 @@
-import { geminiApiKey, mapsApiKey } from "@/lib/server/config";
+import { browserMapConfig, connectionSettings } from "@/lib/server/config";
 import type { NextRequest } from "next/server";
 import { withUser } from "@/lib/server/http";
 import { repository } from "@/lib/server/repository";
+import { jaipurMapPreview } from "@/lib/server/outing/catalog";
 
 export function GET(req: NextRequest) {
   return withUser(req, async (user) => {
-    const browserMapKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const connections = connectionSettings();
+    const browserMap = browserMapConfig();
     const [items, sessions] = await Promise.all([
       repository.listItems(user.id),
       repository.sessions(user.id),
@@ -15,16 +17,13 @@ export function GET(req: NextRequest) {
       location: user.selectedLocation,
       items,
       sessions,
-      browserMap: browserMapKey
-        ? {
-            apiKey: browserMapKey,
-            mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID,
-          }
-        : null,
+      connections,
+      mapPreview: user.selectedLocation ? null : jaipurMapPreview(),
+      browserMap,
       configured: {
-        gemini: !!geminiApiKey(),
-        maps: !!mapsApiKey(),
-        browserMap: !!browserMapKey,
+        gemini: connections.meteredEnabled && connections.keys.gemini,
+        maps: connections.meteredEnabled && connections.keys.maps,
+        browserMap: !!browserMap,
       },
     };
   });

@@ -1,95 +1,108 @@
 # CityBuddy
 
-CityBuddy is a local city assistant with a shopping checklist, contextual text conversations and a landmark guide. Choose a city, address, or landmark manually. The same browser profile keeps its checklist, location and conversation history in SQLite.
+CityBuddy is a text-based city assistant. It keeps your manual location, checklist, chat sessions, preferences and itineraries in SQLite. The default setup searches an included Jaipur catalog and plans outings locally.
 
 ## Run locally
 
-Use Node.js 22.13 or later and npm. With nvm, `nvm use` selects the project's Node 22 version. From the project directory, run the following commands. On an existing installation, keep your current `.env` file.
+Use Node.js 22.13 or later and npm. Run `nvm use` if you use nvm. Keep your existing root `.env` when upgrading.
 
 ```bash
 npm ci
 cp -n .env.example .env
+npm run db:setup
 npm run dev
 ```
 
-Open [CityBuddy on localhost](http://localhost:3000). The development command applies the checked-in Prisma migrations. The default database is `prisma/dev.db`. For a production build, run `npm run build` followed by `npm start`.
+Open [CityBuddy](http://localhost:3000) or the [outing planner](http://localhost:3000/outing). The same Next.js process serves the web app and the [workspace API](http://localhost:3000/api/workspace). The API reference is [below](#http-api). Development startup also applies pending migrations. For production, run `npm run build` and `npm start`.
+
+Start by setting **Jaipur** or **Hawa Mahal** as your location. You can also enter latitude and longitude. Open **Outing planner** to set your travel mode, time window and interests, select stops, and create a plan. Then use the planner or chat to say “Skip the next place,” “I already visited this,” or “I only have one hour left.” The development simulator supports coordinates, map selection and arrival at a scheduled stop.
+
+**My Items** supports quantities, notes and pending, purchased or skipped status. **Live Talk** searches around the selected location and remembers results for follow-ups. **On-Site Guide** shows sourced descriptions where the catalog supplies them. Click a chat suggestion to put its text in the composer. Send “Stop” or use **End session** to close a conversation while keeping its history. Use the same browser profile to resume your saved state.
+
+## Configuration
+
+Use a single root `.env`. The default configuration requires no provider credentials.
+
+| Variable | Default or purpose |
+| --- | --- |
+| `DATABASE_URL` | `file:./dev.db`. Relative to the Prisma schema directory. Compose sets a path in its data volume. |
+| `CITYBUDDY_ALLOW_METERED` | `0`. Set to `1` only when you explicitly approve use of the configured Google services and any resulting charges. |
+| `CITYBUDDY_WORKER` | Enabled by default. Set to `0` to disable the prepared-context worker. |
+| `CITYBUDDY_SIMULATOR` | `0`. The simulator panel is visible in development. Set to `1` to expose it in production. |
+| `CITYBUDDY_TIME_ZONE` | `Asia/Kolkata`. Used for time-of-day chat and preparation. |
+| `CITYBUDDY_PLACE_CATALOG` | Optional path to an additional local JSON catalog. |
+| `CITYBUDDY_PORT` | `3000`. Optional Compose host port. |
+| `gemini_api_city_buddy`, `GEMINI_API_KEY` | Optional Gemini server key and fallback. |
+| `GEMINI_MODEL` | Optional Gemini model selection. Defaults to `gemini-3.1-flash-lite`. |
+| `google_map_api_city_buddy`, `GOOGLE_MAPS_API_KEY` | Optional Maps Experience server key and fallback. |
+| `GOOGLE_MAPS_MCP_URL` | Optional Maps Experience endpoint override. |
+| `GOOGLE_PLACES_API_KEY` | Optional Places API key for verified details. |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAP_ID` | Optional browser map credentials. Apply HTTP referrer and Maps JavaScript API restrictions to the browser key. |
+| `NEXT_PUBLIC_APP_URL` | Base URL for the optional provider smoke test. Defaults to `http://localhost:3000`. |
+
+Connections shows which keys are present and whether their providers are enabled. Restart CityBuddy after updating `.env`. After explicit opt-in, the existing Google adapters support broader place searches, route evidence, map links and optional Gemini chat. The map uses the local view while Google loads and if Google is unavailable. The planner and the background worker still use the local catalog. See the [Gemini API keys](https://ai.google.dev/gemini-api/docs/api-key), [Maps Experience agent tools](https://developers.google.com/maps/ai/maps-experience-agent-tools), and [Maps JavaScript API keys](https://developers.google.com/maps/documentation/javascript/get-api-key) documentation.
 
 ## Run with Docker
-
-From the project directory, keep your existing `.env` and start the app with Docker Compose.
 
 ```bash
 docker compose up --build -d
 ```
 
-Open [CityBuddy on localhost](http://localhost:3000). On startup, the container applies pending Prisma migrations to its SQLite database in the `citybuddy-data` volume. The container starts with its own database. `docker compose down` keeps that volume.
+Open [CityBuddy](http://localhost:3000). Compose passes settings from the root `.env` to the container. Its startup command migrates the SQLite database in the `citybuddy-data` volume. The earlier `ritikdutta/citybuddy:tagname` image predates this refactor. Build from this checkout to run these changes.
 
-Set `CITYBUDDY_PORT` in `.env` to use a different host port. Allow the resulting localhost origin in the Maps browser key restrictions. Compose supplies the Maps and Gemini settings from `.env` when it creates the container.
+## Data and estimates
 
-To use the Docker Hub image, run `docker compose pull` followed by `docker compose up -d --no-build`.
+The included catalog contains 444 mapped places and localities in Jaipur, including six landmark descriptions sourced from Rajasthan Tourism. Local place names, coordinates, categories and the bundled street and water layer come from OpenStreetMap extracts. Place cards link to source records. [OpenStreetMap contributors and ODbL](https://www.openstreetmap.org/copyright) · [Rajasthan Tourism Jaipur guide](https://www.tourism.rajasthan.gov.in/jaipur.html)
 
-## Connect Google services
+Extend coverage by importing your own Overpass JSON exports. Include node coordinates or request centers for ways and relations. The importer runs on local files.
 
-| Environment variable | Purpose |
-| --- | --- |
-| `gemini_api_city_buddy` | Preferred server-side Gemini Developer API key from Google AI Studio. |
-| `GEMINI_API_KEY` | Fallback server key when `gemini_api_city_buddy` is empty. |
-| `GEMINI_MODEL` | Function-calling model. Defaults to `gemini-3.1-flash-lite`. |
-| `google_map_api_city_buddy` | Preferred server key for Maps Experience agent tools. |
-| `GOOGLE_MAPS_API_KEY` | Fallback server key when `google_map_api_city_buddy` is empty or Google denies it access to a Maps tool. |
-| `GOOGLE_MAPS_MCP_URL` | Streamable HTTP endpoint, defaulting to `https://mapstools.googleapis.com/mcp`. |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser key for Maps JavaScript API. Apply a website restriction for the local app and an API restriction for Maps JavaScript API. |
-| `GOOGLE_PLACES_API_KEY` | Optional server key for Places API (New). Enables structured address enrichment, ratings and opening hours. |
-| `NEXT_PUBLIC_GOOGLE_MAP_ID` | Optional Google map ID for advanced markers. Local development defaults to Google’s demo map ID. |
-| `DATABASE_URL` | SQLite connection URL. Relative paths resolve against the Prisma schema directory. |
-| `NEXT_PUBLIC_APP_URL` | App origin used by the live verification script. Defaults to `http://localhost:3000`. |
-| `DEMO_MODE` | Leave at `false` for the real-service MVP. Provider fixtures live in the test suite. |
+```bash
+npm run places:import -- ./additional-places.json ./overpass-export.json
+```
 
-Put keys in the git-ignored `.env` and restart the server. The **Connections** panel shows which keys are present. **Test MCP connection** discovers Google's tools and runs a small place search to verify access to search results. The checklist, history and session ending work independently of Google. A missing browser key leaves place cards, source links and directions available. [Gemini API keys](https://ai.google.dev/gemini-api/docs/api-key) · [Maps Experience agent tools setup](https://developers.google.com/maps/ai/maps-experience-agent-tools) · [Maps JavaScript API setup](https://developers.google.com/maps/documentation/javascript/get-api-key)
+Set `CITYBUDDY_PLACE_CATALOG` to the output path and restart. For Compose, bind-mount that file through an override and use its container path. Keep source attribution with the data.
 
-## Use the three modes
-
-- **My Items** supports quantities, notes, editing, purchase status and deletion. Switch to **Ask CityBuddy** to manage the same list conversationally or find shops.
-- **Live Talk** searches around the selected location, remembers the order of earlier results and can route to a referenced destination. Ask in English, Hindi or Hinglish.
-- **On-Site Guide** uses the manually selected landmark. Historical explanations use retrieved source material and acknowledge gaps. Use **End Session** or send **Stop**, **Exit**, **End session** or **Goodbye** to finish.
-
-Select **Set Location** on the overview, or use the location control at the top of any page. Ambiguous queries offer candidates. Changing the selection updates geographic context in active sessions and keeps earlier messages available in session history.
-
-## Implementation
-
-- Next.js App Router serves both React screens and API handlers. The client uses `TextInputProvider` with a streamed progress channel. JSON is also supported by the message endpoint.
-- `lib/server/maps.ts` connects with the official MCP SDK, sends the server key in the request header, pages through `tools/list` and validates each allowed tool call against the discovered JSON Schema. The health check uses a fresh connection. The optional Places adapter enriches previously identified places.
-- `ManualLocationProvider` resolves names and Google Maps place links and obtains candidates with actual coordinates. Only server-issued candidates can be selected. Some MCP results supply a source title and coordinates without a structured address. In that case CityBuddy stores a null address and displays the source title. [Google’s place search fields](https://developers.google.com/maps/ai/maps-experience-agent-tools/search-places) · [Resolution API](https://developers.google.com/maps/ai/maps-experience-agent-tools/resolution-api)
-- `lib/server/agent.ts` runs a bounded Gemini tool loop. It preserves full function-call parts, including thought signatures. Tool responses provide source titles, URLs, ordered places and route measurements. The UI renders supplied Google Maps attribution beside recommendations. [Gemini function calling](https://ai.google.dev/gemini-api/docs/function-calling) · [Maps attribution](https://developers.google.com/maps/ai/maps-experience-agent-tools/attribution)
-- `lib/server/repository.ts` owns persistence. A random HTTP-only identity cookie maps to a hashed credential. Each record is scoped to that user. Each active chat has a short turn lease. A completed turn commits the user message, assistant reply, map context and checklist edits in one transaction. The client request ID makes a retry of a completed turn idempotent.
-- `public/art/` contains original WebP illustrations made with built-in ImageGen. The art briefs depict a parchment panorama of Hawa Mahal, a produce bazaar, a café terrace and a Rajasthani gateway. Live places and routes appear in the interactive map.
+Local name lookup depends on the installed catalog. Coordinates work anywhere, with empty nearby results outside covered areas. The offline map plots available points. Distance follow-ups use the selected location and the coordinates of a known place and identify the result as straight-line distance. The planner uses straight-line distances, a detour allowance and typical travel speeds. Stock, opening hours, prices, ratings, accessibility, road routes and traffic are unverified unless a configured provider returns them. A saved budget is a planning preference. The planner labels partial plans and records constraints it could not meet. Chat matches English, Latin-script Hinglish and Devanagari Hindi turn by turn. The optional Gemini path handles broader phrasing.
 
 ## HTTP API
 
+JSON requests can use the HTTP-only identity cookie from `GET /api/workspace`. A new browser profile starts with its own state.
+
 | Method and path | Input or result |
 | --- | --- |
-| GET `/api/workspace` | Current identity, manual location, checklist, sessions and service configuration flags. |
-| POST `/api/location/resolve` | Accepts `{ "query": "Mansarovar, Jaipur" }` and returns candidate places. |
-| POST `/api/location/select` | Accepts a returned `place_id`. Saves it for the user and their active sessions. |
-| GET / POST `/api/items` | List items or create one with a name and optional quantity, notes and status. |
-| PATCH / DELETE `/api/items/:id` | Change supplied fields or remove an owned item. |
-| POST `/api/sessions` | Accepts a mode. Opens or resumes that mode’s active session. |
-| GET `/api/sessions/:id` | Ordered messages, source metadata, location and geographic context. |
-| POST `/api/sessions/:id/messages` | Accepts `user_id`, `session_id`, `mode`, `message`, `location` and optional UUID `request_id`. Uses the saved location as authoritative. |
-| POST `/api/sessions/:id/end` | Ends the session and retains its messages. |
-| GET `/api/mcp/health` | Live tool discovery. Returns a service error for missing credentials, failed connectivity or missing required tools. |
+| GET `/api/workspace` | Current identity, location, checklist, sessions and provider flags. |
+| POST `/api/location/resolve` | Accepts a `query` such as `Hawa Mahal, Jaipur` or `26.9239, 75.8267`. |
+| PATCH `/api/location` | Accepts a returned `place_id`, latitude and longitude with optional name, or `{ "clear": true }`. |
+| POST `/api/location/select` | Compatibility endpoint for selecting a server-issued candidate. |
+| POST `/api/location/simulate` | Accepts coordinates or an owned `tripId` and `stopId`. |
+| GET / POST `/api/items` | List or create checklist items. Include an optional UUID `requestId` to deduplicate a retry. |
+| PATCH / DELETE `/api/items/:id` | Update or remove an owned checklist item. |
+| POST `/api/sessions` | Open or resume `my_items`, `live_talk` or `on_site_guide`. |
+| GET `/api/sessions/:id` | Ordered messages, structured results, location and geographic context. |
+| POST `/api/chat`, `/api/sessions/:id/messages` | Accepts `user_id`, `session_id`, `mode`, `location`, `message` and an optional UUID `request_id`. The session message endpoint supports streamed NDJSON progress. |
+| POST `/api/sessions/:id/end` | End a conversation and retain its history. |
+| GET `/api/places/nearby` | Filters include `q`, repeated `category`, `radius` in meters, `limit` and `explore=1`. Returns applied radii and ranked results. |
+| GET `/api/places/details` | Looks up a catalog entry using the `id` query parameter. |
+| GET / PATCH `/api/preferences` | Read or update travel mode, available minutes, maximum distance and interests. |
+| POST `/api/trips/plan` | Accepts a UUID `requestId`, `constraints` and optional `sessionId`. |
+| GET `/api/trips/active`, `/api/trips/:id` | Read the active or an owned saved itinerary. |
+| POST `/api/trips/:id/replan` | Accepts the current `version`, an `action` and any applicable `stopId` or `remainingMinutes`. |
+| GET / POST `/api/recommendations` | Get ranked exploration results or record a `shown` or `dismissed` event. |
+| GET / POST `/api/outing` | Read planning and preparation state or request a preparation job. |
+| GET / DELETE `/api/jobs/:id` | Read the status of a job or cancel it. |
+| GET `/api/metrics` | Development-only process counters and timing aggregates. |
+| GET `/api/mcp/health` | Optional live provider discovery after metered opt-in. |
 
-Use `my_items`, `live_talk` or `on_site_guide` as the mode. Send the identity cookie returned by the workspace endpoint with subsequent requests. JSON clients receive the completed session. Clients that request `application/x-ndjson` receive progress events followed by a result or error.
+Request types for planning, discovery and preferences are in [`lib/outing-contracts.ts`](lib/outing-contracts.ts). Stale itinerary revisions return HTTP 409. The chat request ID and trip request ID let clients retry without duplicating persisted results.
 
-## Verify
+## Verification
 
 ```bash
 npm run typecheck
 npm test
 npm run build
-npm run test:live
 ```
 
-The automated suite uses a temporary SQLite database, a loopback MCP protocol server and scripted model turns. It exercises location selection, checklist CRUD, identity isolation, geographic follow-ups, route grounding, session ending, replay and transaction rollback.
+With the app running in local mode, run `npm run test:offline`. It creates a fresh identity, exercises eight workflows through the HTTP API and checks stored state. Use `CITYBUDDY_TEST_URL` to target a different loopback origin. The unit and integration suite uses temporary SQLite databases and loopback mock providers. Run `npm run test:live` only after explicitly approving metered calls and setting `CITYBUDDY_ALLOW_METERED=1`.
 
-Run the live check with the development server running and Google credentials configured. It exercises the eight requested workflows with an isolated test identity and makes real provider calls. If a required server key is absent, it runs the independent checks and exits with status 2 to identify incomplete live verification.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the audit, migration and module boundaries.

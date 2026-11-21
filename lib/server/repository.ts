@@ -6,6 +6,7 @@ import {
   type ShoppingItem,
 } from "@prisma/client";
 import { db } from "./db";
+import { queuePreparation } from "./outing/context";
 import { AppError, conflict, notFound } from "./errors";
 import {
   emptyGeo,
@@ -16,6 +17,7 @@ import {
   type Message,
   type MessageMeta,
   type Mode,
+  type NewItem,
   type Session,
   type SessionSummary,
 } from "../contracts";
@@ -64,7 +66,44 @@ type TurnResult = {
   context: GeoContext;
   changes: ItemChange[];
   end?: boolean;
+  finish?: (tx: Prisma.TransactionClient) => Promise<{
+    content: string;
+    metadata?: MessageMeta;
+    context?: GeoContext;
+  }>;
 };
+
+async function saveLocation(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  current: Location | null,
+  selected: Location | null,
+) {
+  await tx.user.update({
+    where: { id: userId },
+    data: {
+      selectedLocation: selected ? json(selected) : Prisma.DbNull,
+      locationCandidates: Prisma.DbNull,
+    },
+  });
+  if (
+    current?.place_id !== selected?.place_id ||
+    current?.latitude !== selected?.latitude ||
+    current?.longitude !== selected?.longitude
+  ) {
+    await tx.chatSession.updateMany({
+      where: { userId, status: "active" },
+      data: {
+        selectedLocation: selected ? json(selected) : Prisma.DbNull,
+        context: json(emptyGeo()),
+        turnToken: null,
+        turnExpiresAt: null,
+      },
+    });
+  }
+  await queuePreparation(tx, userId);
+  return selected;
+}
 
 export const repository = {
   async identity(cookie?: string) {
@@ -87,13 +126,20 @@ export const repository = {
       })
     ).map(itemView);
   },
-  async addItem(
-    userId: string,
-    values: Partial<ItemValues> & { name: string },
-  ) {
-    return itemView(
-      await db.shoppingItem.create({ data: { ...values, userId } }),
-    );
+  async addItem(userId: string, values: NewItem) {
+    return db.$transaction(async (tx) => {
+      if (values.requestId) {
+        const existing = await tx.shoppingItem.findUnique({
+          where: { userId_requestId: { userId, requestId: values.requestId } },
+        });
+        if (existing) return itemView(existing);
+      }
+      const item = await tx.shoppingItem.create({
+        data: { ...values, userId },
+      });
+      await queuePreparation(tx, userId);
+      return itemView(item);
+    });
   },
   async editItem(userId: string, id: string, values: Partial<ItemValues>) {
     return db.$transaction(async (tx) => {
@@ -102,14 +148,18 @@ export const repository = {
         data: values,
       });
       if (!changed.count) throw notFound();
+      await queuePreparation(tx, userId);
       return itemView(
         await tx.shoppingItem.findFirstOrThrow({ where: { id, userId } }),
       );
     });
   },
   async removeItem(userId: string, id: string) {
-    if (!(await db.shoppingItem.deleteMany({ where: { id, userId } })).count)
-      throw notFound();
+    await db.$transaction(async (tx) => {
+      if (!(await tx.shoppingItem.deleteMany({ where: { id, userId } })).count)
+        throw notFound();
+      await queuePreparation(tx, userId);
+    });
   },
   async rememberChoices(userId: string, choices: Location[]) {
     await db.user.update({
@@ -139,26 +189,38 @@ export const repository = {
           "invalid_choice",
         );
       }
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          selectedLocation: json(selected),
-          locationCandidates: Prisma.DbNull,
-        },
-      });
-      if ((user.selectedLocation as Location | null)?.place_id !== placeId) {
-        await tx.chatSession.updateMany({
-          where: { userId, status: "active" },
-          data: {
-            selectedLocation: json(selected),
-            context: json(emptyGeo()),
-            turnToken: null,
-            turnExpiresAt: null,
-          },
-        });
-      }
+      await saveLocation(
+        tx,
+        userId,
+        user.selectedLocation as Location | null,
+        selected,
+      );
       return selected;
     });
+  },
+  async updateLocation(userId: string, selected: Location | null) {
+    return db.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+      return saveLocation(
+        tx,
+        userId,
+        user.selectedLocation as Location | null,
+        selected,
+      );
+    });
+  },
+  async setLocationInTurn(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    selected: Location,
+  ) {
+    const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+    return saveLocation(
+      tx,
+      userId,
+      user.selectedLocation as Location | null,
+      selected,
+    );
   },
   async sessions(userId: string) {
     return (
@@ -317,6 +379,13 @@ export const repository = {
             );
         }
       }
+      if (result.changes.length) await queuePreparation(tx, userId);
+      const output = result.finish ? await result.finish(tx) : result;
+      if (result.finish && output.context)
+        await tx.chatSession.update({
+          where: { id },
+          data: { context: json(output.context) },
+        });
       await tx.chatMessage.create({
         data: { sessionId: id, requestId, role: "user", content: message },
       });
@@ -325,8 +394,8 @@ export const repository = {
           sessionId: id,
           requestId,
           role: "assistant",
-          content: result.content,
-          relevantToolMetadata: json(result.metadata),
+          content: output.content,
+          relevantToolMetadata: json(output.metadata ?? result.metadata),
         },
       });
     });

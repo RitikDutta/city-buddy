@@ -8,13 +8,18 @@ datasource db {
 }
 
 model User {
-  id                 String         @id @default(uuid())
-  identityHash       String         @unique @map("identity_hash")
-  selectedLocation   Json?          @map("selected_location")
-  locationCandidates Json?          @map("location_candidates")
-  createdAt          DateTime       @default(now()) @map("created_at")
+  id                 String                @id @default(uuid())
+  identityHash       String                @unique @map("identity_hash")
+  selectedLocation   Json?                 @map("selected_location")
+  locationCandidates Json?                 @map("location_candidates")
+  createdAt          DateTime              @default(now()) @map("created_at")
   items              ShoppingItem[]
   sessions           ChatSession[]
+  preference         UserPreference?
+  trips              Trip[]
+  jobs               BackgroundJob[]
+  prepared           PreparedContext?
+  recommendations    RecommendationEvent[]
 }
 
 model ShoppingItem {
@@ -25,9 +30,11 @@ model ShoppingItem {
   quantity  Int      @default(1)
   notes     String   @default("")
   status    String   @default("pending")
+  requestId String?  @map("request_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([userId, requestId])
   @@index([userId, createdAt])
 }
 
@@ -44,6 +51,7 @@ model ChatSession {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
   messages         ChatMessage[]
+  trips            Trip[]
 
   @@index([userId, mode, updatedAt])
 }
@@ -60,4 +68,96 @@ model ChatMessage {
 
   @@unique([sessionId, requestId, role])
   @@index([sessionId, createdAt])
+}
+
+model UserPreference {
+  userId            String   @id
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode              String   @default("walking")
+  maxDistanceMeters Int      @default(4500)
+  availableMinutes  Int      @default(180)
+  interests         Json
+  updatedAt         DateTime @updatedAt
+}
+
+model Trip {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId   String?
+  session     ChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  requestId   String?
+  origin      Json
+  constraints Json
+  version     Int          @default(1)
+  status      String       @default("active")
+  notes       Json
+  feasible    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  stops       TripStop[]
+
+  @@unique([userId, requestId])
+  @@index([userId, status, createdAt])
+}
+
+model TripStop {
+  id            String    @id @default(uuid())
+  tripId        String
+  trip          Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  position      Int
+  place         Json?
+  kind          String
+  label         String
+  status        String    @default("pending")
+  mandatory     Boolean   @default(false)
+  itemIds       Json
+  arrivalMinute Int
+  visitMinutes  Int
+  travelMinutes Int
+  travelMeters  Int
+  completedAt   DateTime?
+
+  @@index([tripId, position])
+}
+
+model BackgroundJob {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        String
+  key         String
+  basis       String
+  status      String    @default("created")
+  attempts    Int       @default(0)
+  runAt       DateTime  @default(now())
+  lockedUntil DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, key])
+  @@index([status, runAt])
+  @@index([userId, kind, status])
+}
+
+model PreparedContext {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  basis     String
+  payload   Json
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
+}
+
+model RecommendationEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId   String
+  action    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, placeId])
 }

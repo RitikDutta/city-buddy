@@ -1193,27 +1193,28 @@ code {
   position: absolute;
   inset: 0;
 }
-.map-cover,
 .map-placeholder {
   padding: 20px 20px min(32dvh, 270px);
   color: #455749;
   font-size: 0.9rem;
 }
-.map-cover {
-  position: absolute;
-  inset: 0;
-  background: #edf1e7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
+.map-provider-status,
+.map-preview-label {
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
 }
-.map-load-message {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  max-width: 34ch;
+.map-provider-status {
+  position: absolute;
+  left: var(--edge);
+  max-width: min(360px, calc(100% - 24px));
+  border: 1px solid var(--line);
+}
+.provider-notice {
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 .map-placeholder {
   background:
@@ -1668,4 +1669,193 @@ code {
   padding-left: 0.7rem;
   color: #4a5c49;
   font-size: 0.86rem;
+}
+
+.local-map {
+  position: absolute;
+  inset: 0;
+  background-color: #eef2e9;
+  background-image:
+    linear-gradient(#d7e3d6 1px, transparent 1px),
+    linear-gradient(90deg, #d7e3d6 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.local-basemap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.local-plot {
+  position: absolute;
+  inset: 70px 28px 42px;
+}
+.local-plot-pick {
+  cursor: crosshair;
+}
+.local-pin {
+  position: absolute;
+  transform: translate(-50%, -80%);
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid #427356;
+  color: #254f39;
+  box-shadow: 0 2px 5px #1736242a;
+}
+.local-pin.origin {
+  background: #27644d;
+  color: white;
+}
+.local-pin.selected {
+  z-index: 1;
+  outline: 3px solid #a0bc92;
+}
+.local-attribution {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  color: #2e4f3a;
+  background: var(--surface);
+  padding-inline: 5px;
+  font-size: 0.71rem;
+}
+.local-attribution a {
+  text-decoration: underline;
+}
+.outing-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+.outing-column,
+.outing-form,
+.outing-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.outing-card {
+  padding: 17px;
+}
+.outing-card h2 {
+  font-size: 1.5rem;
+}
+.outing-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.outing-fields label,
+.outing-short label {
+  display: grid;
+  gap: 3px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.outing-fields input,
+.outing-fields select {
+  width: 100%;
+}
+.outing-interests {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 5px 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+}
+.outing-interests legend {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0 4px;
+}
+.outing-interests label,
+.outing-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.86rem;
+}
+.outing-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.outing-actions > input {
+  flex: 1;
+}
+.outing-map {
+  position: relative;
+  height: clamp(245px, 36vw, 370px);
+  overflow: hidden;
+  isolation: isolate;
+  --edge: 10px;
+}
+.outing-stops,
+.outing-results {
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+}
+.outing-stops li,
+.outing-results li {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+.outing-stops li[data-status="visited"] {
+  background: #edf5ea;
+}
+.outing-stops li[data-status="skipped"] {
+  color: var(--muted);
+}
+.outing-stop-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.outing-stop-line time {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.outing-stop-line span {
+  margin-left: auto;
+  font-size: 0.75rem;
+  text-transform: capitalize;
+}
+.outing-muted,
+.outing-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.outing-diagnostics {
+  display: grid;
+  gap: 4px;
+  font-size: 0.82rem;
+  margin: 0;
+}
+.outing-diagnostics div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.outing-diagnostics dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+@media (max-width: 800px) {
+  .outing-grid {
+    grid-template-columns: 1fr;
+  }
 }

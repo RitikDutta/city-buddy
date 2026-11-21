@@ -10,7 +10,7 @@ export function Sources({ values }: { values: Source[] }) {
   if (!values.length) return null;
   return (
     <div className="sources">
-      <strong>Google Maps</strong>
+      <strong>Sources</strong>
       {values.map((s) => (
         <a key={s.title + s.url} href={s.url} target="_blank" rel="noreferrer">
           {s.title}
@@ -60,7 +60,7 @@ export function LocationForm({
         setNote("Choose the location you meant.");
       } else
         setNote(
-          "No matching location with map coordinates was found. Try adding a city or locality.",
+          "No matching location was found. Try a catalogued area or enter latitude, longitude.",
         );
     } catch (e) {
       setError(errorText(e));

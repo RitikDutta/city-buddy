@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Cable,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -32,41 +33,63 @@ function bootstrap() {
 const links = [
   { name: "Overview", path: "/", icon: LayoutGrid },
   ...modes.map((mode) => ({ ...modeInfo[mode], icon: modeIcons[mode] })),
+  { name: "Outing planner", path: "/outing", icon: CalendarDays },
 ];
 function Connections({ data }: { data: Workspace | null }) {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
+  const connections = data?.connections;
+  const enabled = connections?.meteredEnabled;
   const services = [
-    ["Gemini agent", "gemini_api_city_buddy", data?.configured.gemini],
-    ["Maps Experience MCP", "google_map_api_city_buddy", data?.configured.maps],
+    ["Gemini agent", "gemini_api_city_buddy", connections?.keys.gemini],
+    [
+      "Maps Experience MCP",
+      "google_map_api_city_buddy",
+      connections?.keys.maps,
+    ],
     [
       "Interactive map",
       "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
-      data?.configured.browserMap,
+      connections?.keys.browserMap,
     ],
   ] as const;
   return (
     <>
-      <p className="modal-description">
-        Configure the Google services in your project’s <code>.env</code>{" "}
-        file. Restart the development server after changing keys.
-      </p>
+      {connections && !enabled && (
+        <p className="modal-description">
+          CityBuddy is using local chat and maps. To use Google services, set{" "}
+          <code>CITYBUDDY_ALLOW_METERED=1</code> in <code>.env</code> and
+          restart.
+        </p>
+      )}
       <div className="connection-list">
-        {services.map(([label, key, ok]) => (
+        {services.map(([label, key, detected]) => (
           <div key={key}>
-            {ok ? <CheckCircle2 size={19} /> : <CircleDashed size={19} />}
+            {detected && enabled ? (
+              <CheckCircle2 size={19} />
+            ) : (
+              <CircleDashed size={19} />
+            )}
             <div>
               <strong>{label}</strong>
               <code>{key}</code>
             </div>
-            <small>{ok ? "Key set" : "Key needed"}</small>
+            <small>
+              {!connections
+                ? "Checking…"
+                : detected
+                  ? enabled
+                    ? "Key set"
+                    : "Key detected · off"
+                  : "Key needed"}
+            </small>
           </div>
         ))}
       </div>
       <button
         className="secondary"
-        disabled={checking}
+        disabled={checking || !data?.configured.maps}
         onClick={async () => {
           setChecking(true);
           setError("");

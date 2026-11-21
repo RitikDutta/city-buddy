@@ -1,8 +1,15 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { ChevronDown, ExternalLink, MapPin, Milestone, X } from "lucide-react";
 import { type Location, type Place, type RouteResult } from "@/lib/contracts";
-import { Spinner } from "./ui";
+import { JaipurBasemap } from "./jaipur-basemap";
 import { useWorkspace } from "./workspace";
 
 declare global {
@@ -74,6 +81,7 @@ function GoogleMap({
   selected,
   choose,
   bottomInset,
+  fallback,
 }: {
   apiKey: string;
   mapId?: string;
@@ -83,16 +91,20 @@ function GoogleMap({
   selected: string | null;
   choose: (id: string) => void;
   bottomInset: number;
+  fallback: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const ref = useRef<google.maps.Map | null>(null);
   const pick = useRef(choose);
   pick.current = choose;
   const [ready, setReady] = useState(false);
+  const [tilesReady, setTilesReady] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
+    let tiles: google.maps.MapsEventListener | undefined;
+    let tileTimeout: number | undefined;
     const fail = () => {
       if (alive) setError(mapAuthError);
     };
@@ -100,7 +112,7 @@ function GoogleMap({
     void loadMap(apiKey)
       .then(() => {
         if (!alive || !container.current) return;
-        ref.current = new google.maps.Map(container.current, {
+        const map = new google.maps.Map(container.current, {
           center: { lat: location.latitude, lng: location.longitude },
           zoom: 14,
           mapId: mapId || "DEMO_MAP_ID",
@@ -114,6 +126,14 @@ function GoogleMap({
             position: google.maps.ControlPosition.TOP_RIGHT,
           },
         });
+        ref.current = map;
+        tiles = google.maps.event.addListenerOnce(map, "tilesloaded", () => {
+          window.clearTimeout(tileTimeout);
+          if (alive) setTilesReady(true);
+        });
+        tileTimeout = window.setTimeout(() => {
+          if (alive) setError((current) => current || mapLoadError);
+        }, 15_000);
         setReady(true);
       })
       .catch((e) => {
@@ -122,6 +142,8 @@ function GoogleMap({
       });
     return () => {
       alive = false;
+      window.clearTimeout(tileTimeout);
+      tiles?.remove();
       ref.current = null;
       window.removeEventListener("citybuddy-map-auth-error", fail);
     };
@@ -198,41 +220,45 @@ function GoogleMap({
       map.fitBounds(geometry.bounds, { top, bottom, left: 36, right: 52 });
     }
   }, [geometry, selected, bottomInset]);
+  const visible = ready && tilesReady && !error;
   return (
-    <div className="map-wrap">
+    <>
+      {!visible && fallback}
       <div
-        className="map-canvas"
-        ref={container}
-        aria-label="Google map of selected location and returned places"
-      />
-      {(error || !ready) && (
-        <div className="map-cover" role={error ? "alert" : "status"}>
-          {error ? (
-            <div className="map-load-message">
-              <p>{error}</p>
-              {error === mapLoadError && (
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => {
-                    setError("");
-                    setReady(false);
-                    setAttempt((n) => n + 1);
-                  }}
-                >
-                  Retry map
-                </button>
-              )}
-            </div>
-          ) : (
-            <>
-              <Spinner />
-              Loading map…
-            </>
+        className="map-wrap"
+        style={{ visibility: visible ? "visible" : "hidden" }}
+        aria-hidden={!visible}
+      >
+        <div
+          className="map-canvas"
+          ref={container}
+          aria-label="Google map of selected location and returned places"
+        />
+      </div>
+      {error && (
+        <div
+          className="map-provider-status"
+          role="status"
+          style={{ bottom: Math.max(38, bottomInset + 14) }}
+        >
+          <p>{error}</p>
+          {error === mapLoadError && (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => {
+                setError("");
+                setReady(false);
+                setTilesReady(false);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              Retry Google Maps
+            </button>
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
 export function RouteCard({ route }: { route: RouteResult }) {
@@ -291,6 +317,7 @@ export function MapPanel({
   clearSelection,
   changeLocation,
   bottomInset,
+  onSimulate,
 }: {
   location: Location | null;
   places: Place[];
@@ -300,15 +327,33 @@ export function MapPanel({
   clearSelection: () => void;
   changeLocation: () => void;
   bottomInset: number;
+  onSimulate?: (point: { latitude: number; longitude: number }) => void;
 }) {
   const { data } = useWorkspace();
   const browserMap = data?.browserMap;
+  const preview = location ? null : data?.mapPreview;
+  const center = location ?? preview?.location;
+  const displayedPlaces = location ? places : (preview?.places ?? places);
   const focused =
-    places.find((place) => place.place_id === selected) ??
-    (location?.place_id === selected ? location : null);
+    displayedPlaces.find((place) => place.place_id === selected) ??
+    (center?.place_id === selected ? center : null);
+  const localMap = center ? (
+    <LocalMap
+      location={center}
+      places={displayedPlaces}
+      selected={selected}
+      choose={choose}
+      bottomInset={bottomInset}
+      onSimulate={location ? onSimulate : undefined}
+    />
+  ) : (
+    <div className="map-placeholder">
+      <p>Set a location to open the map.</p>
+    </div>
+  );
   return (
     <section className="module-map" aria-label="Area map">
-      {browserMap && location ? (
+      {browserMap && location && !onSimulate ? (
         <GoogleMap
           key={location.place_id}
           apiKey={browserMap.apiKey}
@@ -319,15 +364,10 @@ export function MapPanel({
           selected={selected}
           choose={choose}
           bottomInset={bottomInset}
+          fallback={localMap}
         />
       ) : (
-        <div className="map-placeholder">
-          <p>
-            {browserMap || !data
-              ? "Set a location to open the map."
-              : "The map needs a Google Maps browser key."}
-          </p>
-        </div>
+        localMap
       )}
       <div className="map-tools">
         <button
@@ -344,13 +384,19 @@ export function MapPanel({
           <span>{location?.name ?? "Set location"}</span>
           <ChevronDown size={14} />
         </button>
+        {preview && (
+          <small className="map-preview-label">Jaipur map preview</small>
+        )}
         {focused && (
           <div className="map-place">
             <div>
               <strong>{focused.name}</strong>
               {focused.maps_url && (
                 <a href={focused.maps_url} target="_blank" rel="noreferrer">
-                  Open in Google Maps <ExternalLink size={12} />
+                  {focused.place_id.startsWith("osm:")
+                    ? "Open in OpenStreetMap"
+                    : "Open map listing"}{" "}
+                  <ExternalLink size={12} />
                 </a>
               )}
             </div>
@@ -367,5 +413,136 @@ export function MapPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function LocalMap({
+  location,
+  places,
+  selected,
+  choose,
+  bottomInset,
+  onSimulate,
+}: {
+  location: Location;
+  places: Place[];
+  selected: string | null;
+  choose: (id: string) => void;
+  bottomInset: number;
+  onSimulate?: (point: { latitude: number; longitude: number }) => void;
+}) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 300, height: 200 });
+  useEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setSize({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      }),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const orientation = Math.max(
+    0.02,
+    Math.cos((location.latitude * Math.PI) / 180),
+  );
+  const points = [
+    ...new Map([location, ...places].map((p) => [p.place_id, p])).values(),
+  ].filter((p) => p.latitude !== null && p.longitude !== null);
+  const rangeX =
+    Math.max(
+      0.009,
+      ...points.map(
+        (p) => Math.abs(p.longitude! - location.longitude) * orientation,
+      ),
+    ) * 2.25;
+  const rangeY =
+    Math.max(
+      0.009,
+      ...points.map((p) => Math.abs(p.latitude! - location.latitude)),
+    ) * 2.25;
+  const scale = Math.min(size.width / rangeX, size.height / rangeY);
+  const coversJaipur =
+    scale >= 600 &&
+    location.latitude >= 26.86 &&
+    location.latitude <= 26.98 &&
+    location.longitude >= 75.75 &&
+    location.longitude <= 75.87;
+  function move(e: MouseEvent<HTMLDivElement>) {
+    if (!onSimulate || e.target !== e.currentTarget || !scale) return;
+    const bounds = e.currentTarget.getBoundingClientRect();
+    const latitude =
+      location.latitude - (e.clientY - bounds.top - size.height / 2) / scale;
+    const longitude =
+      location.longitude +
+      (e.clientX - bounds.left - size.width / 2) / scale / orientation;
+    if (Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)
+      onSimulate({
+        latitude: Number(latitude.toFixed(6)),
+        longitude: Number(longitude.toFixed(6)),
+      });
+  }
+  return (
+    <div className="local-map" aria-label="Offline map of place coordinates">
+      {coversJaipur && (
+        <JaipurBasemap
+          center={location}
+          plot={frame}
+          size={size}
+          scale={scale}
+          orientation={orientation}
+        />
+      )}
+      <div
+        ref={frame}
+        className={"local-plot" + (onSimulate ? " local-plot-pick" : "")}
+        style={{ bottom: Math.max(40, bottomInset + 20) }}
+        onClick={move}
+      >
+        {points.map((point) => (
+          <button
+            type="button"
+            key={point.place_id}
+            className={
+              "local-pin" +
+              (point.place_id === selected ? " selected" : "") +
+              (point.place_id === location.place_id ? " origin" : "")
+            }
+            style={{
+              left:
+                size.width / 2 +
+                (point.longitude! - location.longitude) * orientation * scale,
+              top:
+                size.height / 2 - (point.latitude! - location.latitude) * scale,
+            }}
+            title={point.name}
+            aria-label={point.name}
+            onClick={() =>
+              onSimulate
+                ? onSimulate({
+                    latitude: point.latitude!,
+                    longitude: point.longitude!,
+                  })
+                : choose(point.place_id)
+            }
+          >
+            <MapPin size={17} aria-hidden />
+          </button>
+        ))}
+      </div>
+      <small className="local-attribution">
+        Offline map ·{" "}
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+        >
+          © OpenStreetMap contributors
+        </a>
+      </small>
+    </div>
   );
 }

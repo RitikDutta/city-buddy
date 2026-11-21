@@ -8,6 +8,11 @@ services:
       - "127.0.0.1:${CITYBUDDY_PORT:-3000}:3000"
     environment:
       DATABASE_URL: file:/app/data/sqlite/citybuddy.db
+      CITYBUDDY_ALLOW_METERED: ${CITYBUDDY_ALLOW_METERED:-0}
+      CITYBUDDY_WORKER: ${CITYBUDDY_WORKER:-1}
+      CITYBUDDY_SIMULATOR: ${CITYBUDDY_SIMULATOR:-0}
+      CITYBUDDY_TIME_ZONE: ${CITYBUDDY_TIME_ZONE:-Asia/Kolkata}
+      CITYBUDDY_PLACE_CATALOG: ${CITYBUDDY_PLACE_CATALOG:-}
       gemini_api_city_buddy: ${gemini_api_city_buddy:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
