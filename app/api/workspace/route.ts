@@ -1,4 +1,4 @@
-import { mapsApiKey } from "@/lib/server/config";
+import { geminiApiKey, mapsApiKey } from "@/lib/server/config";
 import type { NextRequest } from "next/server";
 import { withUser } from "@/lib/server/http";
 import { repository } from "@/lib/server/repository";
@@ -15,7 +15,7 @@ export function GET(req: NextRequest) {
       items,
       sessions,
       configured: {
-        gemini: !!process.env.GEMINI_API_KEY,
+        gemini: !!geminiApiKey(),
         maps: !!mapsApiKey(),
         browserMap: !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
       },

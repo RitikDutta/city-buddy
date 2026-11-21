@@ -1,4 +1,4 @@
-import { mapsApiKey } from "./config";
+import { geminiApiKey, mapsApiKey } from "./config";
 import { randomUUID } from "node:crypto";
 import { setTimeout as wait } from "node:timers/promises";
 import {
@@ -32,7 +32,7 @@ export interface ChatModel {
 }
 export const gemini: ChatModel = {
   async next(contents, systemInstruction, declarations, signal, progress) {
-    const key = process.env.GEMINI_API_KEY;
+    const key = geminiApiKey();
     if (!key) throw missingProvider("gemini");
     try {
       const ai = new GoogleGenAI({
@@ -204,7 +204,7 @@ export async function runTurn(
       });
       return repository.session(userId, id);
     }
-    if (!options.model && !process.env.GEMINI_API_KEY)
+    if (!options.model && !geminiApiKey())
       throw missingProvider("gemini");
     if (!loc && session.mode !== "my_items")
       throw new AppError(

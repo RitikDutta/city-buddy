@@ -18,7 +18,8 @@ Open [CityBuddy on localhost](http://localhost:3000). The development command ap
 
 | Environment variable | Purpose |
 | --- | --- |
-| `GEMINI_API_KEY` | Server-side Gemini Developer API key from Google AI Studio. |
+| `gemini_api_city_buddy` | Preferred server-side Gemini Developer API key from Google AI Studio. |
+| `GEMINI_API_KEY` | Fallback server key when `gemini_api_city_buddy` is empty. |
 | `GEMINI_MODEL` | Function-calling model. Defaults to `gemini-3.1-flash-lite`. |
 | `google_map_api_city_buddy` | Preferred server key for Maps Experience agent tools. |
 | `GOOGLE_MAPS_API_KEY` | Fallback server key when `google_map_api_city_buddy` is empty. |

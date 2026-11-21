@@ -49,7 +49,7 @@ export function missingProvider(service: "maps" | "gemini") {
       )
     : new AppError(
         503,
-        "The AI agent needs a Gemini key. Set GEMINI_API_KEY in .env.local to start chatting.",
+        "The AI agent needs a Gemini key. Set gemini_api_city_buddy or GEMINI_API_KEY to start chatting.",
         "gemini_not_configured",
       );
 }

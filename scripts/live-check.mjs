@@ -171,7 +171,7 @@ if (!workspace.configured.maps || !workspace.configured.gemini) {
     "LIVE CHECKS INCOMPLETE · Configure " +
       [
         !workspace.configured.maps && "google_map_api_city_buddy",
-        !workspace.configured.gemini && "GEMINI_API_KEY",
+        !workspace.configured.gemini && "gemini_api_city_buddy",
       ]
         .filter(Boolean)
         .join(" and ") +
