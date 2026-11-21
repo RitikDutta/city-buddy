@@ -20,7 +20,8 @@ Open [CityBuddy on localhost](http://localhost:3000). The development command ap
 | --- | --- |
 | `GEMINI_API_KEY` | Server-side Gemini Developer API key from Google AI Studio. |
 | `GEMINI_MODEL` | Function-calling model. Defaults to `gemini-3.1-flash-lite`. |
-| `GOOGLE_MAPS_API_KEY` | Server key restricted to Maps Experience agent tools. Enable the service for the key’s Google Cloud project. |
+| `google_map_api_city_buddy` | Preferred server key for Maps Experience agent tools. |
+| `GOOGLE_MAPS_API_KEY` | Fallback server key when `google_map_api_city_buddy` is empty. |
 | `GOOGLE_MAPS_MCP_URL` | Streamable HTTP endpoint, defaulting to `https://mapstools.googleapis.com/mcp`. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser key for Maps JavaScript API. Apply a website restriction for the local app and an API restriction for Maps JavaScript API. |
 | `GOOGLE_PLACES_API_KEY` | Optional server key for Places API (New). Enables structured address enrichment, ratings and opening hours. |

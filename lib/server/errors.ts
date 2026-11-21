@@ -44,7 +44,7 @@ export function missingProvider(service: "maps" | "gemini") {
   return service === "maps"
     ? new AppError(
         503,
-        "Google Maps MCP needs a server key. Set GOOGLE_MAPS_API_KEY in .env.local to search for places.",
+        "Google Maps MCP needs a server key. Set google_map_api_city_buddy or GOOGLE_MAPS_API_KEY to search for places.",
         "maps_not_configured",
       )
     : new AppError(

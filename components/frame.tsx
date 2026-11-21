@@ -39,7 +39,7 @@ function Connections({ data }: { data: Workspace | null }) {
   const [error, setError] = useState("");
   const services = [
     ["Gemini agent", "GEMINI_API_KEY", data?.configured.gemini],
-    ["Maps Experience MCP", "GOOGLE_MAPS_API_KEY", data?.configured.maps],
+    ["Maps Experience MCP", "google_map_api_city_buddy", data?.configured.maps],
     [
       "Interactive map",
       "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",

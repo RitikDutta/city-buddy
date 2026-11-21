@@ -170,6 +170,7 @@ let host: string;
 before(async () => {
   process.env.DATABASE_URL = "file:" + database;
   process.env.GOOGLE_MAPS_API_KEY = key;
+  process.env.google_map_api_city_buddy = "";
   delete process.env.GOOGLE_PLACES_API_KEY;
   const sqlite = new DatabaseSync(database);
   sqlite.exec(
@@ -317,7 +318,18 @@ test("MCP discovers paginated tools, validates inputs, prefers structured output
   process.env.GOOGLE_MAPS_API_KEY = "invalid";
   try {
     await assert.rejects(openMaps(), /credentials|could not/);
+    process.env.google_map_api_city_buddy = key;
+    const preferred = await openMaps();
+    try {
+      const result = await preferred.call("search_places", {
+        textQuery: "Jaipur",
+      });
+      assert.equal(result.places[0].place_id, home.id);
+    } finally {
+      await preferred.close();
+    }
   } finally {
+    process.env.google_map_api_city_buddy = "";
     process.env.GOOGLE_MAPS_API_KEY = old;
   }
 });

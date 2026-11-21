@@ -170,7 +170,7 @@ if (!workspace.configured.maps || !workspace.configured.gemini) {
   console.log(
     "LIVE CHECKS INCOMPLETE · Configure " +
       [
-        !workspace.configured.maps && "GOOGLE_MAPS_API_KEY",
+        !workspace.configured.maps && "google_map_api_city_buddy",
         !workspace.configured.gemini && "GEMINI_API_KEY",
       ]
         .filter(Boolean)
