@@ -94,6 +94,7 @@ function Connections({ data }: { data: Workspace | null }) {
 }
 export function AppFrame({ children }: { children: ReactNode }) {
   const path = usePathname();
+  const isModule = modes.some((mode) => modeInfo[mode].path === path);
   const [data, setData] = useState<Workspace | null>(null);
   const [error, setError] = useState("");
   const [panel, setPanel] = useState<"location" | "connections" | null>(null);
@@ -124,6 +125,17 @@ export function AppFrame({ children }: { children: ReactNode }) {
     (path === "/history" ? "Session history" : "Workspace");
   const changeLocation = () => setPanel("location");
   const connections = () => setPanel("connections");
+  const startupError = error && (
+    <ErrorNote>
+      {error}{" "}
+      <button
+        className="text-button"
+        onClick={() => void refresh().catch((e) => setError(errorText(e)))}
+      >
+        Retry
+      </button>
+    </ErrorNote>
+  );
   return (
     <WorkspaceContext.Provider
       value={{ data, refresh, changeLocation, connections }}
@@ -131,118 +143,115 @@ export function AppFrame({ children }: { children: ReactNode }) {
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <div className="shell">
-        {menu && (
-          <button
-            className="nav-backdrop"
-            aria-label="Close navigation"
-            onClick={() => setMenu(false)}
-          />
-        )}
-        <aside
-          className={"sidebar" + (menu ? " open" : "")}
-          aria-label="Workspace sidebar"
-        >
-          <div className="brand-line">
-            <Link className="brand" href="/" aria-label="CityBuddy home">
-              <img width="36" height="36" src="/icon.svg" alt="" />
-              CityBuddy
-            </Link>
+      {isModule ? (
+        <main id="main" className="module-main">
+          {startupError && <div className="module-error">{startupError}</div>}
+          {children}
+        </main>
+      ) : (
+        <div className="shell">
+          {menu && (
             <button
-              className="mobile-close icon-button"
-              onClick={() => setMenu(false)}
+              className="nav-backdrop"
               aria-label="Close navigation"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="nav-label">Workspace</div>
-          <nav className="nav-list" aria-label="Main navigation">
-            {links.map(({ name, path: target, icon: Icon }) => (
-              <Link
-                key={target}
-                href={target}
-                aria-current={path === target ? "page" : undefined}
-                className={path === target ? "selected" : ""}
-              >
-                <Icon size={19} />
-                {name}
-              </Link>
-            ))}
-          </nav>
-          <div className="nav-rule" />
-          <Link
-            href="/history"
-            className={"history-nav" + (path === "/history" ? " selected" : "")}
-            aria-current={path === "/history" ? "page" : undefined}
+              onClick={() => setMenu(false)}
+            />
+          )}
+          <aside
+            className={"sidebar" + (menu ? " open" : "")}
+            aria-label="Workspace sidebar"
           >
-            <History size={19} />
-            Session history
-          </Link>
-          <div className="sidebar-end">
-            <button
-              onClick={() => {
-                setMenu(false);
-                connections();
-              }}
-            >
-              <Cable size={18} />
-              Connections
-            </button>
-            <div>
-              <Compass size={15} />
-              Personal workspace
+            <div className="brand-line">
+              <Link className="brand" href="/" aria-label="CityBuddy home">
+                <img width="36" height="36" src="/icon.svg" alt="" />
+                CityBuddy
+              </Link>
+              <button
+                className="mobile-close icon-button"
+                onClick={() => setMenu(false)}
+                aria-label="Close navigation"
+              >
+                <X size={18} />
+              </button>
             </div>
-          </div>
-        </aside>
-        <div className="main-col">
-          <header className="topbar">
-            <button
-              className="menu-button icon-button"
-              onClick={() => setMenu(true)}
-              aria-label="Open navigation"
-              aria-expanded={menu}
-            >
-              <Menu size={22} />
-            </button>
-            <div className="breadcrumb">
-              <Compass size={17} />
-              <span>Workspace</span>
-              <ChevronRight size={14} />
-              <strong>{title}</strong>
-            </div>
-            <Link className="mobile-brand" href="/">
-              <img src="/icon.svg" alt="" width="27" height="27" />
-              CityBuddy
-            </Link>
-            <button
-              className="active-location"
-              onClick={changeLocation}
-              title={data?.location ? "Change Location" : "Set your location"}
-            >
-              <MapPin size={15} />
-              <span>{data?.location?.name ?? "No location set"}</span>
-              <ChevronDown size={14} />
-            </button>
-          </header>
-          <main id="main" className="main-content">
-            {error && (
-              <ErrorNote>
-                {error}{" "}
-                <button
-                  className="text-button"
-                  onClick={() =>
-                    void refresh().catch((e) => setError(errorText(e)))
-                  }
+            <div className="nav-label">Workspace</div>
+            <nav className="nav-list" aria-label="Main navigation">
+              {links.map(({ name, path: target, icon: Icon }) => (
+                <Link
+                  key={target}
+                  href={target}
+                  aria-current={path === target ? "page" : undefined}
+                  className={path === target ? "selected" : ""}
                 >
-                  Retry
-                </button>
-              </ErrorNote>
-            )}
-            {children}
-          </main>
+                  <Icon size={19} />
+                  {name}
+                </Link>
+              ))}
+            </nav>
+            <div className="nav-rule" />
+            <Link
+              href="/history"
+              className={
+                "history-nav" + (path === "/history" ? " selected" : "")
+              }
+              aria-current={path === "/history" ? "page" : undefined}
+            >
+              <History size={19} />
+              Session history
+            </Link>
+            <div className="sidebar-end">
+              <button
+                onClick={() => {
+                  setMenu(false);
+                  connections();
+                }}
+              >
+                <Cable size={18} />
+                Connections
+              </button>
+              <div>
+                <Compass size={15} />
+                Personal workspace
+              </div>
+            </div>
+          </aside>
+          <div className="main-col">
+            <header className="topbar">
+              <button
+                className="menu-button icon-button"
+                onClick={() => setMenu(true)}
+                aria-label="Open navigation"
+                aria-expanded={menu}
+              >
+                <Menu size={22} />
+              </button>
+              <div className="breadcrumb">
+                <Compass size={17} />
+                <span>Workspace</span>
+                <ChevronRight size={14} />
+                <strong>{title}</strong>
+              </div>
+              <Link className="mobile-brand" href="/">
+                <img src="/icon.svg" alt="" width="27" height="27" />
+                CityBuddy
+              </Link>
+              <button
+                className="active-location"
+                onClick={changeLocation}
+                title={data?.location ? "Change Location" : "Set your location"}
+              >
+                <MapPin size={15} />
+                <span>{data?.location?.name ?? "No location set"}</span>
+                <ChevronDown size={14} />
+              </button>
+            </header>
+            <main id="main" className="main-content">
+              {startupError}
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      )}
       {panel && (
         <Modal
           title={

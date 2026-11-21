@@ -1,16 +1,35 @@
 "use client";
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
+  useId,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
-import { ExternalLink, MapPin, Send, Square } from "lucide-react";
-import { modeInfo, type Mode, type Session } from "@/lib/contracts";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  ListChecks,
+  MapPin,
+  Send,
+  Square,
+} from "lucide-react";
+import {
+  modeInfo,
+  type Mode,
+  type Place,
+  type RouteResult,
+  type Session,
+} from "@/lib/contracts";
 import { api, errorText, TextInputProvider } from "@/lib/client/api";
 import { Sources } from "./location-form";
-import { ErrorNote, Spinner, modeIcons } from "./ui";
+import { ErrorNote, Modal, Spinner, modeIcons } from "./ui";
 import { useWorkspace } from "./workspace";
 import { MapPanel, RouteCard } from "./map-panel";
 
@@ -29,6 +48,8 @@ const savedGuideFollowUps = [
     prompt: "आस-पास की जगहें दिखाएँ।",
   },
 ];
+const emptyPlaces: Place[] = [];
+const emptyRoutes: RouteResult[] = [];
 function RichText({ value }: { value: string }) {
   const plain = value.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, "$1");
   return (
@@ -57,9 +78,11 @@ function RichText({ value }: { value: string }) {
 export function ChatRoom({
   mode,
   sessionId,
+  checklist,
 }: {
   mode: Mode;
   sessionId?: string;
+  checklist?: ReactNode;
 }) {
   const { data, refresh, changeLocation, connections } = useWorkspace();
   const [session, setSession] = useState<Session | null>(null);
@@ -70,6 +93,12 @@ export function ChatRoom({
   const [selected, setSelected] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [overrideId, setOverrideId] = useState<string>();
+  const [collapsed, setCollapsed] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [mapInset, setMapInset] = useState(0);
+  const stage = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const transcriptId = useId();
   const attempted = useRef<{
     message: string;
     id: string;
@@ -82,6 +111,24 @@ export function ChatRoom({
   const locationId = data?.location?.place_id;
   const target = overrideId ?? sessionId;
   const Icon = modeIcons[mode];
+  useEffect(() => {
+    const area = stage.current;
+    const sheet = panel.current;
+    if (!area || !sheet) return;
+    const measure = () => {
+      setMapInset(
+        Math.ceil(
+          area.getBoundingClientRect().bottom -
+            sheet.getBoundingClientRect().top,
+        ),
+      );
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(area);
+    observer.observe(sheet);
+    measure();
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     if (!userId) return;
     let active = true;
@@ -112,12 +159,19 @@ export function ChatRoom({
   }, [mode, target, userId, locationId, reload, refresh]);
   useEffect(() => {
     const parent = bottom.current?.parentElement;
-    if (parent) parent.scrollTop = parent.scrollHeight;
-  }, [session?.messages.length, busy, pending]);
+    if (!parent || parent.hidden) return;
+    const latest = parent.querySelector<HTMLElement>(
+      "article.message:last-of-type",
+    );
+    parent.scrollTop =
+      !busy &&
+      latest?.classList.contains("assistant") &&
+      latest.offsetHeight > parent.clientHeight
+        ? latest.offsetTop - 8
+        : parent.scrollHeight;
+  }, [session?.messages.length, busy, pending, collapsed]);
   const pick = useCallback((id: string) => {
     setSelected(id);
-    const card = document.getElementById("place-" + id);
-    if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
   const fillDraft = (prompt: string) => {
     setDraft(prompt);
@@ -139,6 +193,7 @@ export function ChatRoom({
       };
     setError("");
     setPending(message);
+    setCollapsed(false);
     setBusy("Sending your message");
     const current = session.id;
     try {
@@ -212,250 +267,322 @@ export function ChatRoom({
     }
   };
   const needsLocation = !data?.location && mode !== "my_items";
-  if (!session)
-    return error ? (
-      <ErrorNote>
-        {error}{" "}
-        <button className="text-button" onClick={() => setReload((n) => n + 1)}>
-          Retry
-        </button>
-      </ErrorNote>
-    ) : (
-      <div className="soft-empty" role="status">
-        <Spinner />
-        Opening conversation…
-      </div>
+  const ended = session?.status === "ended";
+  const places = useMemo(() => {
+    const current = session?.context.places ?? emptyPlaces;
+    if (!session || !selected || current.some((p) => p.place_id === selected))
+      return current;
+    const earlier = session.messages.findLast((m) =>
+      m.metadata?.places.some((p) => p.place_id === selected),
     );
-  const ended = session.status === "ended";
+    const place = earlier?.metadata?.places.find(
+      (p) => p.place_id === selected,
+    );
+    return place ? [...current, place] : current;
+  }, [session, selected]);
   return (
-    <div className="chat-layout">
-      <section className="panel chat-panel">
-        <div className="chat-head">
-          <div>
-            <Icon size={18} />
-            <strong>{modeInfo[mode].name}</strong>
-          </div>
-          {!ended && (
-            <button
-              className="subtle-button"
-              disabled={!!busy}
-              onClick={() => void end()}
-            >
-              <Square size={12} />
-              End Session
-            </button>
-          )}
-        </div>
-        <div className="chat-location">
-          <MapPin size={14} />
-          {session.location?.name ?? "No location set"}
-          {!ended && (
-            <button className="text-button" onClick={changeLocation}>
-              {session.location ? "Change Location" : "Set Location"}
-            </button>
-          )}
-        </div>
-        <div className="chat-scroll" role="log" aria-live="polite">
-          {!session.messages.length && !pending && (
-            <div className="chat-empty">
-              <span className={"empty-icon " + mode}>
-                <Icon size={28} />
-              </span>
-              <h2>
-                {mode === "my_items"
-                  ? "What’s on your list?"
-                  : mode === "on_site_guide"
-                    ? "Get to know this place"
-                    : "Where shall we explore?"}
-              </h2>
-              <p>
-                {needsLocation
-                  ? "Choose a location to ask about the places around you."
-                  : mode === "my_items"
-                    ? "Ask about pending items or find shops near your selected location."
-                    : "Ask in English, Hindi, or Hinglish."}
-              </p>
-              {needsLocation && !ended ? (
-                <button className="secondary" onClick={changeLocation}>
-                  <MapPin size={15} />
-                  Set Location
-                </button>
-              ) : (
-                !ended && (
-                  <div className="chat-prompts">
-                    {prompts[mode].map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => fillDraft(p)}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-          )}
-          {session.messages.map((m) => {
-            const savedFollowUp =
-              m.role === "assistant" &&
-              mode === "on_site_guide" &&
-              !m.metadata?.suggestion
-                ? savedGuideFollowUps.find(({ question }) =>
-                    m.content.endsWith(question),
-                  )
-                : undefined;
-            const prompt =
-              m.role === "assistant"
-                ? (m.metadata?.suggestion ?? savedFollowUp?.prompt)
-                : undefined;
-            const canSuggest = prompt && !ended && !needsLocation;
-            return (
-              <article key={m.id} className={"message " + m.role}>
-                <small>{m.role === "user" ? "You" : "CityBuddy"}</small>
-                <RichText
-                  value={
-                    canSuggest && savedFollowUp
-                      ? m.content
-                          .slice(0, -savedFollowUp.question.length)
-                          .trimEnd()
-                      : m.content
-                  }
-                />
-                {m.metadata && (
-                  <>
-                    {m.metadata.history_excerpt && (
-                      <blockquote className="source-excerpt">
-                        {m.metadata.history_excerpt}
-                      </blockquote>
-                    )}
-                    <Sources values={m.metadata.sources} />
-                    {m.metadata.save_url && (
-                      <a
-                        className="source-link"
-                        href={m.metadata.save_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open places in Google Maps <ExternalLink size={12} />
-                      </a>
-                    )}
-                    {m.metadata.routes.map((r, i) => (
-                      <RouteCard key={i} route={r} />
-                    ))}
-                  </>
-                )}
-                {canSuggest && (
-                  <div className="chat-prompts message-prompts">
-                    <button
-                      type="button"
-                      disabled={!!busy}
-                      onClick={() => fillDraft(prompt)}
-                    >
-                      {prompt}
-                    </button>
-                  </div>
-                )}
-              </article>
-            );
-          })}
-          {pending && (
-            <article className="message user">
-              <small>You</small>
-              <p>{pending}</p>
-            </article>
-          )}
-          {busy && (
-            <div className="working" role="status">
-              <Spinner />
-              {busy}…
-            </div>
-          )}
-          <div ref={bottom} />
-        </div>
-        {error && <ErrorNote>{error}</ErrorNote>}
-        {ended ? (
-          <div className="ended">
-            <p>This session has ended.</p>
-            <button
-              className="primary"
-              onClick={() => void start()}
-              disabled={!!busy}
-            >
-              Start a new session
-            </button>
-          </div>
-        ) : (
-          <div className="composer-wrap">
-            {data && !data.configured.gemini && (
-              <div className="setup-note">
-                Gemini needs an API key to chat.{" "}
-                <button onClick={connections}>View setup</button>
-              </div>
-            )}
-            <form className="composer" onSubmit={send}>
-              <textarea
-                ref={compose}
-                aria-label="Message CityBuddy"
-                placeholder="Message CityBuddy…"
-                value={draft}
-                maxLength={4000}
-                rows={2}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    !e.shiftKey &&
-                    !e.nativeEvent.isComposing
-                  ) {
-                    e.preventDefault();
-                    e.currentTarget.form?.requestSubmit();
-                  }
-                }}
-              />
-              <button
-                className="primary send"
-                disabled={!draft.trim() || !!busy}
-                aria-label="Send message"
-              >
-                <Send size={17} />
-                <span>Send</span>
-              </button>
-            </form>
-          </div>
-        )}
-      </section>
+    <div className="module-stage" ref={stage}>
       <MapPanel
-        location={session.location}
-        places={session.context.places}
-        routes={session.context.routes}
+        location={session ? session.location : (data?.location ?? null)}
+        places={places}
+        routes={session?.context.routes ?? emptyRoutes}
         selected={selected}
         choose={pick}
+        clearSelection={() => setSelected(null)}
+        changeLocation={changeLocation}
+        bottomInset={mapInset}
       />
-    </div>
-  );
-}
-export function TalkPage({
-  mode,
-  sessionId,
-}: {
-  mode: Mode;
-  sessionId?: string;
-}) {
-  const Icon = modeIcons[mode];
-  return (
-    <div className="inner-page">
-      <div className="page-title">
-        <span className={"page-icon " + mode}>
-          <Icon />
-        </span>
-        <div>
-          <h1>{modeInfo[mode].name}</h1>
-          <p>{modeInfo[mode].description}</p>
+      <section className="chat-panel" ref={panel} aria-label="CityBuddy chat">
+        <div className="chat-head">
+          <div className="chat-heading">
+            <Link
+              href="/"
+              className="icon-button"
+              aria-label="Back to overview"
+              title="Back to overview"
+            >
+              <ArrowLeft size={19} />
+            </Link>
+            <span className="chat-mode-icon">
+              <Icon size={17} />
+            </span>
+            <h1>{modeInfo[mode].name}</h1>
+          </div>
+          <div className="chat-actions">
+            {checklist && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Open shopping checklist"
+                title="Shopping checklist"
+                onClick={() => setShowChecklist(true)}
+              >
+                <ListChecks size={18} />
+              </button>
+            )}
+            {session && !ended && (
+              <button
+                type="button"
+                className="icon-button"
+                disabled={!!busy}
+                aria-label="End session"
+                title="End session"
+                onClick={() => void end()}
+              >
+                <Square size={16} />
+              </button>
+            )}
+            {session && (
+              <button
+                type="button"
+                className="icon-button chat-toggle"
+                aria-label={
+                  collapsed ? "Show conversation" : "Minimize conversation"
+                }
+                title={
+                  collapsed ? "Show conversation" : "Minimize conversation"
+                }
+                aria-expanded={!collapsed}
+                aria-controls={transcriptId}
+                onClick={() => setCollapsed(!collapsed)}
+              >
+                {collapsed ? (
+                  <ChevronUp size={20} />
+                ) : (
+                  <ChevronDown size={20} />
+                )}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
-      <ChatRoom mode={mode} sessionId={sessionId} />
+        {!session ? (
+          error ? (
+            <ErrorNote>
+              {error}{" "}
+              <button
+                className="text-button"
+                onClick={() => setReload((n) => n + 1)}
+              >
+                Retry
+              </button>
+            </ErrorNote>
+          ) : (
+            <div className="chat-loading" role="status">
+              <Spinner /> Opening conversation…
+            </div>
+          )
+        ) : (
+          <>
+            <div
+              className="chat-scroll"
+              id={transcriptId}
+              role="log"
+              aria-live="polite"
+              hidden={collapsed}
+            >
+              {!session.messages.length && !pending && (
+                <div className="chat-empty">
+                  <h2>
+                    {mode === "my_items"
+                      ? "What’s on your list?"
+                      : mode === "on_site_guide"
+                        ? "Get to know this place"
+                        : "Where shall we explore?"}
+                  </h2>
+                  {needsLocation && !ended ? (
+                    <button className="secondary" onClick={changeLocation}>
+                      <MapPin size={15} />
+                      Set Location
+                    </button>
+                  ) : (
+                    !ended && (
+                      <div className="chat-prompts">
+                        {prompts[mode].map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => fillDraft(p)}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+              {session.messages.map((m) => {
+                const savedFollowUp =
+                  m.role === "assistant" &&
+                  mode === "on_site_guide" &&
+                  !m.metadata?.suggestion
+                    ? savedGuideFollowUps.find(({ question }) =>
+                        m.content.endsWith(question),
+                      )
+                    : undefined;
+                const prompt =
+                  m.role === "assistant"
+                    ? (m.metadata?.suggestion ?? savedFollowUp?.prompt)
+                    : undefined;
+                const canSuggest = prompt && !ended && !needsLocation;
+                return (
+                  <article key={m.id} className={"message " + m.role}>
+                    <small>{m.role === "user" ? "You" : "CityBuddy"}</small>
+                    <RichText
+                      value={
+                        canSuggest && savedFollowUp
+                          ? m.content
+                              .slice(0, -savedFollowUp.question.length)
+                              .trimEnd()
+                          : m.content
+                      }
+                    />
+                    {m.metadata && (
+                      <>
+                        {m.metadata.history_excerpt && (
+                          <blockquote className="source-excerpt">
+                            {m.metadata.history_excerpt}
+                          </blockquote>
+                        )}
+                        <Sources values={m.metadata.sources} />
+                        {m.metadata.places.length > 0 && (
+                          <details className="chat-places">
+                            <summary>
+                              {m.metadata.places.length === 1
+                                ? "1 place on the map"
+                                : m.metadata.places.length +
+                                  " places on the map"}
+                            </summary>
+                            <ul>
+                              {m.metadata.places.map((place) => (
+                                <li key={place.place_id}>
+                                  <button
+                                    type="button"
+                                    className="text-button"
+                                    onClick={() => pick(place.place_id)}
+                                  >
+                                    <MapPin size={13} /> {place.name}
+                                  </button>
+                                  {place.maps_url && (
+                                    <a
+                                      href={place.maps_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      aria-label={
+                                        "Open " + place.name + " in Google Maps"
+                                      }
+                                    >
+                                      <ExternalLink size={13} />
+                                    </a>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                        {m.metadata.save_url && (
+                          <a
+                            className="source-link"
+                            href={m.metadata.save_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open places in Google Maps{" "}
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+                        {m.metadata.routes.map((r, i) => (
+                          <RouteCard key={i} route={r} />
+                        ))}
+                      </>
+                    )}
+                    {canSuggest && (
+                      <div className="chat-prompts message-prompts">
+                        <button
+                          type="button"
+                          disabled={!!busy}
+                          onClick={() => fillDraft(prompt)}
+                        >
+                          {prompt}
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+              {pending && (
+                <article className="message user">
+                  <small>You</small>
+                  <p>{pending}</p>
+                </article>
+              )}
+              {busy && (
+                <div className="working" role="status">
+                  <Spinner />
+                  {busy}…
+                </div>
+              )}
+              <div ref={bottom} />
+            </div>
+            {error && <ErrorNote>{error}</ErrorNote>}
+            {ended ? (
+              <div className="ended">
+                <p>This session has ended.</p>
+                <button
+                  className="primary"
+                  onClick={() => void start()}
+                  disabled={!!busy}
+                >
+                  Start a new session
+                </button>
+              </div>
+            ) : (
+              <div className="composer-wrap">
+                {data && !data.configured.gemini && (
+                  <div className="setup-note">
+                    Gemini needs an API key to chat.{" "}
+                    <button onClick={connections}>View setup</button>
+                  </div>
+                )}
+                <form className="composer" onSubmit={send}>
+                  <textarea
+                    ref={compose}
+                    aria-label="Message CityBuddy"
+                    placeholder="Message CityBuddy…"
+                    value={draft}
+                    maxLength={4000}
+                    rows={1}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        !e.shiftKey &&
+                        !e.nativeEvent.isComposing
+                      ) {
+                        e.preventDefault();
+                        e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
+                  />
+                  <button
+                    className="primary send"
+                    disabled={!draft.trim() || !!busy}
+                    aria-label="Send message"
+                  >
+                    <Send size={17} />
+                    <span>Send</span>
+                  </button>
+                </form>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+      {showChecklist && checklist && (
+        <Modal title="Shopping checklist" close={() => setShowChecklist(false)}>
+          {checklist}
+        </Modal>
+      )}
     </div>
   );
 }

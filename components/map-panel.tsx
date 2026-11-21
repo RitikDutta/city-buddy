@@ -1,8 +1,7 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Map, MapPin, Milestone } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ExternalLink, MapPin, Milestone, X } from "lucide-react";
 import { type Location, type Place, type RouteResult } from "@/lib/contracts";
-import { Sources } from "./location-form";
 import { Spinner } from "./ui";
 
 declare global {
@@ -53,18 +52,20 @@ function loadMap() {
   });
   return mapLoading;
 }
-export function GoogleMap({
+function GoogleMap({
   location,
   places,
   routes,
   selected,
   choose,
+  bottomInset,
 }: {
   location: Location;
   places: Place[];
   routes: RouteResult[];
   selected: string | null;
   choose: (id: string) => void;
+  bottomInset: number;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const ref = useRef<google.maps.Map | null>(null);
@@ -90,7 +91,13 @@ export function GoogleMap({
           mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "DEMO_MAP_ID",
           streetViewControl: false,
           mapTypeControl: false,
-          fullscreenControl: true,
+          fullscreenControl: false,
+          gestureHandling: "greedy",
+          cameraControl: false,
+          zoomControl: true,
+          zoomControlOptions: {
+            position: google.maps.ControlPosition.TOP_RIGHT,
+          },
         });
         setReady(true);
       })
@@ -103,65 +110,78 @@ export function GoogleMap({
       window.removeEventListener("citybuddy-map-auth-error", fail);
     };
   }, [location.latitude, location.longitude]);
-  useEffect(() => {
-    const map = ref.current;
-    if (!ready || !map) return;
+  const geometry = useMemo(() => {
+    if (!ready) return;
     const bounds = new google.maps.LatLngBounds();
-    const center = { lat: location.latitude, lng: location.longitude };
-    bounds.extend(center);
-    const entries = [
+    const pins = [
       ...new globalThis.Map(
-        [location, ...places].map((p) => [p.place_id, p]),
+        [...places, location].map((p) => [p.place_id, p]),
       ).values(),
-    ];
-    const markers = entries.flatMap((p) => {
+    ].flatMap((p) => {
       if (p.latitude === null || p.longitude === null) return [];
       const position = { lat: p.latitude, lng: p.longitude };
       bounds.extend(position);
-      const marker = new google.maps.marker.AdvancedMarkerElement({
-        map,
-        position,
-        title: p.name,
-        gmpClickable: true,
-      });
-      const listener = marker.addListener("click", () => {
-        pick.current(p.place_id);
-      });
-      return [{ marker, listener }];
+      return [{ place: p, position }];
     });
     const paths = routes.flatMap((r) => {
       if (!r.encoded_polyline) return [];
       const path = google.maps.geometry.encoding.decodePath(r.encoded_polyline);
       path.forEach((p) => bounds.extend(p));
-      return [
+      return [path];
+    });
+    return { pins, paths, bounds };
+  }, [location, places, routes, ready]);
+  useEffect(() => {
+    const map = ref.current;
+    if (!map || !geometry) return;
+    const markers = geometry.pins.map(({ place, position }) => {
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map,
+        position,
+        title: place.name,
+        gmpClickable: true,
+      });
+      const select = () => pick.current(place.place_id);
+      marker.addEventListener("gmp-click", select);
+      return { marker, select };
+    });
+    const lines = geometry.paths.map(
+      (path) =>
         new google.maps.Polyline({
           map,
           path,
           strokeColor: "#276351",
           strokeWeight: 5,
         }),
-      ];
-    });
-    if (markers.length > 1 || paths.length) map.fitBounds(bounds, 36);
-    else {
-      map.setCenter(center);
-      map.setZoom(14);
-    }
+    );
     return () => {
-      for (const { marker, listener } of markers) {
-        listener.remove();
+      for (const { marker, select } of markers) {
+        marker.removeEventListener("gmp-click", select);
         marker.map = null;
       }
-      for (const line of paths) line.setMap(null);
+      for (const line of lines) line.setMap(null);
     };
-  }, [location, places, routes, ready]);
+  }, [geometry]);
   useEffect(() => {
-    const p = [location, ...places].find((p) => p.place_id === selected);
-    if (p && p.latitude !== null && p.longitude !== null && ref.current) {
-      ref.current.panTo({ lat: p.latitude, lng: p.longitude });
-      ref.current.setZoom(16);
+    const map = ref.current;
+    if (!map || !geometry) return;
+    // Keep destinations in the visible viewport above the conversation.
+    const height = map.getDiv().clientHeight;
+    const bottom = Math.min(bottomInset + 26, height * 0.76);
+    const top = Math.min(62, height * 0.18);
+    const focus = geometry.pins.find(
+      ({ place }) => place.place_id === selected,
+    );
+    if (!geometry.paths.length && (focus || geometry.pins.length === 1)) {
+      map.moveCamera({
+        center: (focus ?? geometry.pins[0]).position,
+        zoom: focus ? 16 : 14,
+      });
+      map.panBy(0, Math.round((bottom - top) / 2));
+    } else {
+      map.fitBounds(geometry.bounds, { top, bottom, left: 36, right: 52 });
     }
-  }, [selected, location, places, ready]);
+  }, [geometry, selected, bottomInset]);
   return (
     <div className="map-wrap">
       <div
@@ -235,26 +255,26 @@ export function MapPanel({
   routes,
   selected,
   choose,
+  clearSelection,
+  changeLocation,
+  bottomInset,
 }: {
   location: Location | null;
   places: Place[];
   routes: RouteResult[];
   selected: string | null;
   choose: (id: string) => void;
+  clearSelection: () => void;
+  changeLocation: () => void;
+  bottomInset: number;
 }) {
-  const shown =
-    places.some((p) => p.place_id === selected) ||
-    !location ||
-    location.place_id !== selected
-      ? places
-      : [location, ...places];
+  const hasKey = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const focused =
+    places.find((place) => place.place_id === selected) ??
+    (location?.place_id === selected ? location : null);
   return (
-    <section className="panel map-panel">
-      <h2>
-        <Map size={19} />
-        Area map
-      </h2>
-      {process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && location ? (
+    <section className="module-map" aria-label="Area map">
+      {hasKey && location ? (
         <GoogleMap
           key={location.place_id}
           location={location}
@@ -262,61 +282,54 @@ export function MapPanel({
           routes={routes}
           selected={selected}
           choose={choose}
+          bottomInset={bottomInset}
         />
       ) : (
         <div className="map-placeholder">
-          <span>
-            <Map size={30} />
-          </span>
-          <strong>
-            {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-              ? "Interactive map unavailable"
-              : "Choose a starting point"}
-          </strong>
           <p>
-            {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-              ? "Add the Maps JavaScript browser key to enable the map. Place results appear below."
-              : "Set a location to see it on the map."}
+            {hasKey
+              ? "Set a location to open the map."
+              : "The map needs a Google Maps browser key."}
           </p>
         </div>
       )}
-      <div className="nearby">
-        <h3>
+      <div className="map-tools">
+        <button
+          type="button"
+          className="map-location"
+          onClick={changeLocation}
+          aria-label={
+            location
+              ? "Change location, currently " + location.name
+              : "Set location"
+          }
+        >
           <MapPin size={16} />
-          Places
-        </h3>
-        {shown.length ? (
-          <ol>
-            {shown.map((p) => (
-              <li
-                key={p.place_id}
-                className={selected === p.place_id ? "focused" : ""}
-                id={"place-" + p.place_id}
-              >
-                <button
-                  onClick={() => choose(p.place_id)}
-                  aria-pressed={selected === p.place_id}
-                >
-                  <strong>{p.name}</strong>
-                  {p.formatted_address && <small>{p.formatted_address}</small>}
-                </button>
-                {p.summary && <p>{p.summary}</p>}
-                {p.maps_url && (
-                  <a href={p.maps_url} target="_blank" rel="noreferrer">
-                    Open in Google Maps <ExternalLink size={12} />
-                  </a>
-                )}
-                <Sources values={p.sources} />
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p>Places from your conversation will appear here.</p>
+          <span>{location?.name ?? "Set location"}</span>
+          <ChevronDown size={14} />
+        </button>
+        {focused && (
+          <div className="map-place">
+            <div>
+              <strong>{focused.name}</strong>
+              {focused.maps_url && (
+                <a href={focused.maps_url} target="_blank" rel="noreferrer">
+                  Open in Google Maps <ExternalLink size={12} />
+                </a>
+              )}
+            </div>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={clearSelection}
+              aria-label="Dismiss place details"
+              title="Dismiss place details"
+            >
+              <X size={16} />
+            </button>
+          </div>
         )}
       </div>
-      {routes.map((route, i) => (
-        <RouteCard route={route} key={i} />
-      ))}
     </section>
   );
 }
