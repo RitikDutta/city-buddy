@@ -1,0 +1,25 @@
+services:
+  citybuddy:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_GOOGLE_MAP_ID: ${NEXT_PUBLIC_GOOGLE_MAP_ID:-}
+    init: true
+    ports:
+      - "127.0.0.1:${CITYBUDDY_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: file:/app/data/sqlite/citybuddy.db
+      gemini_api_city_buddy: ${gemini_api_city_buddy:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      google_map_api_city_buddy: ${google_map_api_city_buddy:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_MAPS_MCP_URL: ${GOOGLE_MAPS_MCP_URL:-https://mapstools.googleapis.com/mcp}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+    volumes:
+      - citybuddy-data:/app/data
+
+volumes:
+  citybuddy-data:

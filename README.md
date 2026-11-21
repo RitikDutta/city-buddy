@@ -14,6 +14,18 @@ npm run dev
 
 Open [CityBuddy on localhost](http://localhost:3000). The development command applies the checked-in Prisma migrations. The default database is `prisma/dev.db`. For a production build, run `npm run build` followed by `npm start`.
 
+## Run with Docker
+
+From the project directory, keep your existing `.env` and start the app with Docker Compose.
+
+```bash
+docker compose up --build -d
+```
+
+Open [CityBuddy on localhost](http://localhost:3000). On startup, the container applies pending Prisma migrations to its SQLite database in the `citybuddy-data` volume. The container starts with its own database. `docker compose down` keeps that volume.
+
+Set `CITYBUDDY_PORT` in `.env` to use a different host port. Allow the resulting localhost origin in the Maps browser key restrictions. Rebuild the image after changing `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` or `NEXT_PUBLIC_GOOGLE_MAP_ID` so the browser bundle picks up the change.
+
 ## Connect Google services
 
 | Environment variable | Purpose |
