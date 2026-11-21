@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { setTimeout as wait } from "node:timers/promises";
 
-if (existsSync(".env.local")) process.loadEnvFile(".env.local");
+if (existsSync(".env")) process.loadEnvFile(".env");
 const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 let cookie;
 async function request(path, method = "GET", data) {
@@ -175,7 +175,7 @@ if (!workspace.configured.maps || !workspace.configured.gemini) {
       ]
         .filter(Boolean)
         .join(" and ") +
-      " in .env.local, restart, and run npm run test:live.",
+      " in .env, restart, and run npm run test:live.",
   );
   process.exitCode = 2;
 }

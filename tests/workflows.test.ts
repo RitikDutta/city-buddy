@@ -18,6 +18,7 @@ import { resultPayload, parsePlace } from "../lib/server/map-results";
 const dir = mkdtempSync(join(tmpdir(), "citybuddy-test-"));
 const database = join(dir, "test.db");
 const key = "fixture-key";
+const nameResolutionKey = "fixture-name-resolution-key";
 const requests: { name: string; args: Record<string, any> }[] = [];
 const tools = [
   {
@@ -181,7 +182,8 @@ before(async () => {
   ({ db } = await import("../lib/server/db"));
   ({ runTurn: run } = await import("../lib/server/agent"));
   server = createServer(async (req, res) => {
-    if (req.headers["x-goog-api-key"] !== key) {
+    const requestKey = req.headers["x-goog-api-key"];
+    if (requestKey !== key && requestKey !== nameResolutionKey) {
       res.writeHead(403).end();
       return;
     }
@@ -210,11 +212,20 @@ before(async () => {
     if (call.method === "tools/call") {
       const { name, arguments: args } = call.params;
       requests.push({ name, args });
-      const value = reply(name, args);
-      result = {
-        structuredContent: value,
-        content: [{ type: "text", text: JSON.stringify(value) }],
-      };
+      if (requestKey === nameResolutionKey && name === "search_places") {
+        result = {
+          isError: true,
+          content: [
+            { type: "text", text: "The caller does not have permission" },
+          ],
+        };
+      } else {
+        const value = reply(name, args);
+        result = {
+          structuredContent: value,
+          content: [{ type: "text", text: JSON.stringify(value) }],
+        };
+      }
     }
     res
       .writeHead(200, { "Content-Type": "application/json" })
@@ -331,6 +342,30 @@ test("MCP discovers paginated tools, validates inputs, prefers structured output
   } finally {
     process.env.google_map_api_city_buddy = "";
     process.env.GOOGLE_MAPS_API_KEY = old;
+  }
+});
+test("Maps uses the configured fallback for tools denied to the preferred key", async () => {
+  process.env.google_map_api_city_buddy = nameResolutionKey;
+  try {
+    const connection = await openMaps();
+    try {
+      const names = await connection.call("resolve_names", {
+        queries: [{ text: "Hawa Mahal" }],
+      });
+      assert.equal(names.resolved[0].id, landmark.id);
+      const start = requests.length;
+      for (let i = 0; i < 2; i++) {
+        const search = await connection.call("search_places", {
+          textQuery: "Hawa Mahal, Jaipur",
+        });
+        assert.equal(search.places[0].place_id, landmark.id);
+      }
+      assert.equal(requests.length - start, 3);
+    } finally {
+      await connection.close();
+    }
+  } finally {
+    process.env.google_map_api_city_buddy = "";
   }
 });
 test("manual resolution offers ambiguity, verifies the chosen ID and scopes candidates to one identity", async () => {

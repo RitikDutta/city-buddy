@@ -44,12 +44,12 @@ export function missingProvider(service: "maps" | "gemini") {
   return service === "maps"
     ? new AppError(
         503,
-        "Google Maps MCP needs a server key. Set google_map_api_city_buddy or GOOGLE_MAPS_API_KEY to search for places.",
+        "Google Maps MCP needs a server key. Set google_map_api_city_buddy or GOOGLE_MAPS_API_KEY in .env to search for places.",
         "maps_not_configured",
       )
     : new AppError(
         503,
-        "The AI agent needs a Gemini key. Set gemini_api_city_buddy or GEMINI_API_KEY to start chatting.",
+        "The AI agent needs a Gemini key. Set gemini_api_city_buddy or GEMINI_API_KEY in .env to start chatting.",
         "gemini_not_configured",
       );
 }

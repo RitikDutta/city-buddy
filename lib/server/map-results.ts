@@ -64,7 +64,11 @@ export function resultPayload(result: unknown): RecordValue {
   const blocks = array(wrapped.content).map(record);
   if (wrapped.isError) {
     const details = blocks.map((b) => string(b.text) ?? "").join(" ");
-    if (/permission.denied|forbidden|not authorized/i.test(details)) {
+    if (
+      /permission.denied|(?:does not|do not) have permission|forbidden|not authorized/i.test(
+        details,
+      )
+    ) {
       throw new AppError(
         502,
         "Google denied access to Maps data. Enable Maps Experience agent tools for the server key’s project and allow that API in its key restrictions.",

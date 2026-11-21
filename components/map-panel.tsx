@@ -11,34 +11,47 @@ declare global {
   }
 }
 let mapLoading: Promise<void> | null = null;
+let mapAuthFailed = false;
+const mapLoadError =
+  "Google Maps could not load. Check your connection and try again.";
+const mapAuthError =
+  "Google Maps rejected the browser key. Check Maps JavaScript API and the allowed website in your Google Cloud project.";
+
 function loadMap() {
-  if (typeof google !== "undefined" && google.maps?.marker)
+  if (mapAuthFailed) return Promise.reject(new Error(mapAuthError));
+  if (
+    typeof google !== "undefined" &&
+    google.maps?.marker &&
+    google.maps.geometry
+  )
     return Promise.resolve();
   if (mapLoading) return mapLoading;
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   mapLoading = new Promise<void>((resolve, reject) => {
     const tag = document.createElement("script");
-    const fail = () => {
+    let settled = false;
+    const fail = (message: string) => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timer);
       mapLoading = null;
       tag.remove();
-      reject(
-        new Error(
-          "Google Maps could not load. Check the browser key and its website restrictions.",
-        ),
-      );
+      reject(new Error(message));
     };
-    const timer = window.setTimeout(fail, 14000);
+    const timer = window.setTimeout(() => fail(mapLoadError), 24_000);
     window.cityBuddyMapsReady = () => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timer);
       resolve();
     };
     window.gm_authFailure = () => {
+      mapAuthFailed = true;
       window.dispatchEvent(new Event("citybuddy-map-auth-error"));
-      fail();
+      fail(mapAuthError);
     };
     tag.async = true;
-    tag.onerror = fail;
+    tag.onerror = () => fail(mapLoadError);
     tag.src =
       "https://maps.googleapis.com/maps/api/js?" +
       new URLSearchParams({
@@ -73,13 +86,11 @@ function GoogleMap({
   pick.current = choose;
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
     const fail = () => {
-      if (alive)
-        setError(
-          "Google Maps rejected the browser key. Check Maps JavaScript API and the allowed website in your Google Cloud project.",
-        );
+      if (alive) setError(mapAuthError);
     };
     window.addEventListener("citybuddy-map-auth-error", fail);
     void loadMap()
@@ -102,14 +113,15 @@ function GoogleMap({
         setReady(true);
       })
       .catch((e) => {
-        if (alive) setError(e.message);
+        if (alive)
+          setError(e.message === mapAuthError ? mapAuthError : mapLoadError);
       });
     return () => {
       alive = false;
       ref.current = null;
       window.removeEventListener("citybuddy-map-auth-error", fail);
     };
-  }, [location.latitude, location.longitude]);
+  }, [location.latitude, location.longitude, attempt]);
   const geometry = useMemo(() => {
     if (!ready) return;
     const bounds = new google.maps.LatLngBounds();
@@ -190,8 +202,25 @@ function GoogleMap({
         aria-label="Google map of selected location and returned places"
       />
       {(error || !ready) && (
-        <div className="map-cover">
-          {error || (
+        <div className="map-cover" role={error ? "alert" : "status"}>
+          {error ? (
+            <div className="map-load-message">
+              <p>{error}</p>
+              {error === mapLoadError && (
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => {
+                    setError("");
+                    setReady(false);
+                    setAttempt((n) => n + 1);
+                  }}
+                >
+                  Retry map
+                </button>
+              )}
+            </div>
+          ) : (
             <>
               <Spinner />
               Loading map…

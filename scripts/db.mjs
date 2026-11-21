@@ -3,7 +3,6 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 if (existsSync(".env")) process.loadEnvFile(".env");
 const url = (process.env.DATABASE_URL ||= "file:./dev.db");
 if (url.startsWith("file:")) {

@@ -49,7 +49,7 @@ function Connections({ data }: { data: Workspace | null }) {
   return (
     <>
       <p className="modal-description">
-        Configure the Google services in your project’s <code>.env.local</code>{" "}
+        Configure the Google services in your project’s <code>.env</code>{" "}
         file. Restart the development server after changing keys.
       </p>
       <div className="connection-list">

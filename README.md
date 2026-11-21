@@ -4,11 +4,11 @@ CityBuddy is a local city assistant with a shopping checklist, contextual text c
 
 ## Run locally
 
-Use Node.js 22.13 or later and npm. With nvm, `nvm use` selects the project's Node 22 version. From the project directory, run the following commands. On an existing installation, keep your current `.env.local` file.
+Use Node.js 22.13 or later and npm. With nvm, `nvm use` selects the project's Node 22 version. From the project directory, run the following commands. On an existing installation, keep your current `.env` file.
 
 ```bash
 npm ci
-cp -n .env.example .env.local
+cp -n .env.example .env
 npm run dev
 ```
 
@@ -22,7 +22,7 @@ Open [CityBuddy on localhost](http://localhost:3000). The development command ap
 | `GEMINI_API_KEY` | Fallback server key when `gemini_api_city_buddy` is empty. |
 | `GEMINI_MODEL` | Function-calling model. Defaults to `gemini-3.1-flash-lite`. |
 | `google_map_api_city_buddy` | Preferred server key for Maps Experience agent tools. |
-| `GOOGLE_MAPS_API_KEY` | Fallback server key when `google_map_api_city_buddy` is empty. |
+| `GOOGLE_MAPS_API_KEY` | Fallback server key when `google_map_api_city_buddy` is empty or Google denies it access to a Maps tool. |
 | `GOOGLE_MAPS_MCP_URL` | Streamable HTTP endpoint, defaulting to `https://mapstools.googleapis.com/mcp`. |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser key for Maps JavaScript API. Apply a website restriction for the local app and an API restriction for Maps JavaScript API. |
 | `GOOGLE_PLACES_API_KEY` | Optional server key for Places API (New). Enables structured address enrichment, ratings and opening hours. |
@@ -31,7 +31,7 @@ Open [CityBuddy on localhost](http://localhost:3000). The development command ap
 | `NEXT_PUBLIC_APP_URL` | App origin used by the live verification script. Defaults to `http://localhost:3000`. |
 | `DEMO_MODE` | Leave at `false` for the real-service MVP. Provider fixtures live in the test suite. |
 
-Put keys in the git-ignored `.env.local` and restart the server. The **Connections** panel shows which keys are present. **Test MCP connection** discovers Google's tools and runs a small place-resolution request to verify the key can access data. The checklist, history and session ending work independently of Google. A missing browser key leaves place cards, source links and directions available. [Gemini API keys](https://ai.google.dev/gemini-api/docs/api-key) · [Maps Experience agent tools setup](https://developers.google.com/maps/ai/maps-experience-agent-tools) · [Maps JavaScript API setup](https://developers.google.com/maps/documentation/javascript/get-api-key)
+Put keys in the git-ignored `.env` and restart the server. The **Connections** panel shows which keys are present. **Test MCP connection** discovers Google's tools and runs a small place search to verify access to search results. The checklist, history and session ending work independently of Google. A missing browser key leaves place cards, source links and directions available. [Gemini API keys](https://ai.google.dev/gemini-api/docs/api-key) · [Maps Experience agent tools setup](https://developers.google.com/maps/ai/maps-experience-agent-tools) · [Maps JavaScript API setup](https://developers.google.com/maps/documentation/javascript/get-api-key)
 
 ## Use the three modes
 

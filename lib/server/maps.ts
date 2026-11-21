@@ -54,9 +54,10 @@ function alignFields(value: unknown, schema: Args, definitions: Args): unknown {
   return Object.fromEntries(result);
 }
 
-export async function openMaps(signal?: AbortSignal): Promise<MapsConnection> {
-  const key = mapsApiKey();
-  if (!key) throw missingProvider("maps");
+async function connectMaps(
+  key: string,
+  signal?: AbortSignal,
+): Promise<MapsConnection> {
   const validation = new Ajv({ strict: false, addUsedSchema: false });
   addFormats(validation);
   validation.addFormat("google-duration", /^-?\d+(?:\.\d{1,9})?s$/);
@@ -159,4 +160,49 @@ export async function openMaps(signal?: AbortSignal): Promise<MapsConnection> {
     await client.close().catch(() => {});
     throw providerError("Google Maps MCP", err);
   }
+}
+
+export async function openMaps(signal?: AbortSignal): Promise<MapsConnection> {
+  const key = mapsApiKey();
+  if (!key) throw missingProvider("maps");
+  const fallbackKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  if (!fallbackKey || fallbackKey === key) return connectMaps(key, signal);
+
+  const denied = (error: unknown) =>
+    error instanceof AppError && error.code === "provider_auth";
+  let primary: MapsConnection;
+  try {
+    primary = await connectMaps(key, signal);
+  } catch (error) {
+    if (!denied(error)) throw error;
+    return connectMaps(fallbackKey, signal);
+  }
+
+  const deniedTools = new Set<string>();
+  let fallback: Promise<MapsConnection> | undefined;
+  return {
+    tools: primary.tools,
+    async call(name, args, abort) {
+      if (!deniedTools.has(name)) {
+        try {
+          return await primary.call(name, args, abort);
+        } catch (error) {
+          if (!denied(error)) throw error;
+          deniedTools.add(name);
+        }
+      }
+      fallback ??= connectMaps(fallbackKey, abort ?? signal).catch((error) => {
+        fallback = undefined;
+        throw error;
+      });
+      const connection = await fallback;
+      return connection.call(name, args, abort);
+    },
+    async close() {
+      await Promise.allSettled([
+        primary.close(),
+        fallback?.then((c) => c.close()),
+      ]);
+    },
+  };
 }

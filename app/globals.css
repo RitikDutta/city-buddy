@@ -1209,6 +1209,12 @@ code {
   gap: 8px;
   text-align: center;
 }
+.map-load-message {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 34ch;
+}
 .map-placeholder {
   background:
     repeating-linear-gradient(

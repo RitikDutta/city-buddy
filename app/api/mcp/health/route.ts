@@ -19,9 +19,9 @@ export async function GET() {
           },
           { status: 503, headers: { "Cache-Control": "no-store" } },
         );
-      // Google can allow tool discovery while denying the key access to place data.
-      await connection.call("resolve_names", {
-        queries: [{ text: "Mansarovar, Jaipur" }],
+      // Discovery and name resolution can succeed on a key that cannot search.
+      await connection.call("search_places", {
+        textQuery: "Mansarovar, Jaipur",
       });
       return NextResponse.json(
         { ok: true, tools, missing },
